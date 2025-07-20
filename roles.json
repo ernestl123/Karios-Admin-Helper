@@ -1,0 +1,19 @@
+{
+  "roles": [
+	"Admin",
+	"Visual Arts and Media",
+	"Worship",
+	"Inreach",
+	"Life Group Leaders",
+	"Prayer",
+	"Outreach"
+  ],
+
+  "test_roles": [
+	"Admin",
+	"a",
+	"b",
+	"c",
+	"d"
+  ]
+}

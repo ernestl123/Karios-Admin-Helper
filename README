@@ -1,0 +1,7 @@
+Main functionalities
+
+1) Automatically transition server between school years
+    a) Rename old channels, move to archived cartegory, and sync permissions
+    b) Rename old roles and change color to gray
+    c) Create new copies of old roles for the next incoming year
+2) Automatically assign leaders to leadership roles using a csv file
