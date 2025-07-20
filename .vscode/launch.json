@@ -9,7 +9,7 @@
             "name": "Python bot.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/bot.py",
+            "program": "${workspaceFolder}/src/bot.py",
             "console": "integratedTerminal"
         }
     ]

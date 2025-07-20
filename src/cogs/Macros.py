@@ -112,5 +112,6 @@ class Macros(commands.Cog):
                 await ctx.send(f"Failed to edit role '{role_name}'. Check permissions.")
                 continue
     
+    
 async def setup(bot):
     await bot.add_cog(Macros(bot))

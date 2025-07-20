@@ -1,5 +1,6 @@
 # Ignore Python cache
 __pycache__/
+.vscode/
 
 #Ignore config files
 config.json
