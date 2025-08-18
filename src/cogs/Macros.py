@@ -8,14 +8,28 @@ import random
 import json
 import csv
 
+# from cogs.utils import *  # Removed because 'cogs.utils' could not be resolved and is not used in this file
+from utils import graduate_channel, retire_channel
+
 
 class Macros(commands.Cog):
     def __init__(self, bot):
         self.bot = bot 
+        self.__cog_check__ = self.cog_check
     
+    async def cog_check(self, ctx):
+        allowed_roles = {"Admin Staff", "Pastor", "Shadow Admin"}
+        return any(role.name in allowed_roles for role in ctx.author.roles)
+
     @commands.command(pass_context = True)
-    @commands.has_any_role("Admin Staff", "Pastor", "Shadow Admin")
-    async def assign(self, ctx):
+    async def assignLeadership(self, ctx):
+        """
+        Assigns roles to members based on a CSV file attached to the command message.
+        The CSV file should have two columns: role name and member name.
+
+        Args:
+            ctx: The context of the command.
+        """
         if not ctx.message.attachments:
             return await ctx.send("Please attach a CSV file to the message.")
 
@@ -36,13 +50,13 @@ class Macros(commands.Cog):
 
             # Process the CSV data
             reader = csv.reader(csv_file)
-            # next(reader)  # Assuming the first row is the header
-            print(next(reader))
+            next(reader)  # Skip the header row
 
             rows_processed = 0
-            total_rows = 53
+            total_rows = len(list(reader))
 
             role_names = []
+            leadership_role = discord.utils.get(ctx.guild.roles, name="Leadership")
             # total_rows = sum(1 for _ in csv_file)  # Count total rows for progress tracking
             for row in reader:
                 print(f"Row: {row}")
@@ -87,25 +101,22 @@ class Macros(commands.Cog):
         return None
 
     @commands.command(pass_context=True)
-    @commands.has_any_role("Admin Staff", "Pastor", "Shadow Admin")
-    async def transition_channel(self, ctx, grad_year : int, channel_name : str):
-        archive_category = discord.utils.get(ctx.guild.categories, name="Archived")
-        if not archive_category:
-            return await ctx.send("Archive category not found.")
-
-        channel = discord.utils.get(ctx.guild.channels, name=channel_name)
-        if not channel:
-            return await ctx.send(f"Channel '{channel_name}' not found in the server.")
-
-        new_channel_name = f"{channel_name}-{grad_year}"
-        try:
-            await channel.edit(sync_permissions=True, category=archive_category, name=new_channel_name, reason=f"Moving channel to archive for graduation year {grad_year}")
-            await ctx.send(f"Moved channel '{channel_name}' to archive category and renamed it to '{new_channel_name}'.")
-        except discord.Forbidden:
-            await ctx.send(f"Failed to move channel '{channel_name}'. Check permissions.")
+    async def transitionChannel(self, ctx, channel_name : str, grad_year : int,):
+        if await graduate_channel(ctx, channel_name, grad_year):
+            await ctx.send(f"Old channel '{channel_name}' retired to Archived category and new copy created.")
+        else:
+            await ctx.send(f"Failed to process channel '{channel_name}'. Please check the logs for more details.")
 
     @commands.command(pass_context=True)
-    @commands.has_any_role("Admin Staff", "Pastor", "Shadow Admin")
+    async def retireChannel(self, ctx, channel: discord.TextChannel = None, grad_year : int = -1):
+        # if channel_name:
+        #     channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+        if not channel:     
+            return await ctx.send(f"Channel '{channel}' not found in the server.")
+        await retire_channel(channel, grad_year)
+        await ctx.send(f"Channel '{channel.name}' retired to Archived category.")
+
+    @commands.command(pass_context=True)
     async def transition(self, ctx, grad_year : int):
         with open('roles.json', 'r') as file:
             roles_data = json.load(file)
@@ -143,23 +154,25 @@ class Macros(commands.Cog):
             except discord.Forbidden:
                 print(f"Failed to edit role '{role_name}'. Check permissions.")
                 continue
+        
 
         grad_class_role = self.get_role_by_name(ctx, f"Class of '{grad_year}")
-        fellowship_role = self.get_role_by_name(ctx, "Fellowship")
+        # fellowship_role = self.get_role_by_name(ctx, "Fellowship")
         if not grad_class_role:
             await ctx.send(f"Role 'Class of {grad_year}' not found in the server.")
             return
         
         
-        members_with_role = [member for member in ctx.guild.members if grad_class_role in member.roles]
-        for member in members_with_role:
-            try:
-                await member.remove_roles(fellowship_role, reason=f"Graduating year '{grad_year} removed from fellowship role.")
-                print(f"Removed role '{fellowship_role.name}' from member '{member.display_name}'.")
-            except discord.Forbidden:
-                await ctx.send(f"Failed to remove role '{fellowship_role.name}' from members. Check permissions.")
+        # members_with_role = [member for member in ctx.guild.members if grad_class_role in member.roles]
+        # for member in members_with_role:
+        #     try:
+        #         await member.remove_roles(fellowship_role, reason=f"Graduating year '{grad_year} removed from fellowship role.")
+        #         print(f"Removed role '{fellowship_role.name}' from member '{member.display_name}'.")
+        #     except discord.Forbidden:
+        #         await ctx.send(f"Failed to remove role '{fellowship_role.name}' from members. Check permissions.")
                 
         await ctx.send(f"Transition process for graduation year '{grad_year}' completed successfully.")
 
+    
 async def setup(bot):
     await bot.add_cog(Macros(bot))
