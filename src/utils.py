@@ -81,6 +81,15 @@ async def recreate_channel(ctx, old_channel):
         return None
 
 async def retire_role(role: discord.Role, grad_year: int):
+    """
+    Retires a role by renaming it with the graduation year.
+    Args:
+        role (discord.Role): The role to retire.
+        grad_year (int): The graduation year to append to the role name.
+    
+    Returns:
+        bool: True if the role was successfully retired, False otherwise.
+    """
     new_role_name = f"{role.name} '{grad_year}"
     try:
         await role.edit(name=new_role_name, color=discord.Color.default(), reason=f"Transitioning role for graduation year '{grad_year}")
@@ -90,6 +99,14 @@ async def retire_role(role: discord.Role, grad_year: int):
         raise ValueError(f"Failed to edit role '{role.name}': {e}")
 
 async def copy_role(role: discord.Role):
+    """
+    Copies a role by creating a new role with the same name and color.
+    Args:
+        role (discord.Role): The role to copy.
+    
+    Returns:
+        discord.Role: The newly created role.
+    """
     try:
         new_role = await role.guild.create_role(name=role.name, color=role.color, reason=f"Copying role '{role.name}' for new year")
         return new_role

@@ -12,7 +12,7 @@ import csv
 from utils import graduate_channel, retire_channel
 
 
-class Macros(commands.Cog):
+class AdminMacros(commands.Cog):
     def __init__(self, bot):
         self.bot = bot 
         self.__cog_check__ = self.cog_check
@@ -118,6 +118,18 @@ class Macros(commands.Cog):
 
     @commands.command(pass_context=True)
     async def transition(self, ctx, grad_year : int):
+        """
+        Transition roles and channels for a given graduation year.
+        
+        Args:
+            ctx: The context of the command.
+            grad_year (int): The graduation year to transition.
+        
+        Returns:
+            None    
+        """
+
+        #Update all the leadership roles
         with open('roles.json', 'r') as file:
             roles_data = json.load(file)
         
@@ -155,7 +167,7 @@ class Macros(commands.Cog):
                 print(f"Failed to edit role '{role_name}'. Check permissions.")
                 continue
         
-
+        #Update the graduating class role
         grad_class_role = self.get_role_by_name(ctx, f"Class of '{grad_year}")
         # fellowship_role = self.get_role_by_name(ctx, "Fellowship")
         if not grad_class_role:
@@ -175,4 +187,4 @@ class Macros(commands.Cog):
 
     
 async def setup(bot):
-    await bot.add_cog(Macros(bot))
+    await bot.add_cog(AdminMacros(bot))
