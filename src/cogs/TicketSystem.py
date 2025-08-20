@@ -2,7 +2,7 @@ import asyncio
 import io
 import discord
 from discord.ext import commands
-from VAMModal import VAMModal
+from UI.VAMModal import VAMModal
 
 class TicketSystem(commands.Cog):
     def __init__(self, bot):
@@ -16,13 +16,16 @@ class TicketSystem(commands.Cog):
     @discord.app_commands.command(name = "create_ticket", description = "Create a new ticket for VAM requests")
     async def create_ticket(self, interaction: discord.Interaction):
         await interaction.response.send_modal(VAMModal(interaction.user))
-
-        try:
-            modal_interaction = await self.bot.wait_for("modal_submit", timeout=800.0, check=lambda i: i.custom_id == "vam_modal")
-        except asyncio.TimeoutError:
-            await interaction.followup.send("You took too long to fill out the form.", ephemeral=True)
-            return
-    
+        # try:
+        #     modal_interaction = await self.bot.wait_for("modal_submit", timeout=15.0, check=lambda i: i.user == interaction.user)
+        # except asyncio.TimeoutError:
+        #     await interaction.followup.send("You took too long to fill out the form.", ephemeral=True)
+        #     return
+        # except Exception as e:
+        #     await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        #     return
+        
+        
     async def cog_load(self):
         await self.bot.tree.sync(guild=discord.Object(id=607977353410379825))
 
