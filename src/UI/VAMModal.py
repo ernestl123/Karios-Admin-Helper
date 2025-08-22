@@ -1,3 +1,4 @@
+import json
 import discord
 from discord import ui
 
@@ -13,6 +14,10 @@ class VAMModal(ui.Modal, title="VAM Request Form"):
         super().__init__(custom_id="vam_modal", timeout=15, *args, **kwargs)
         self.user = user
         self.title = f"VAM Request Form - By {user.name}"
+
+        with open("config.json", "r") as file:
+            VAM_ticket_channel_id = json.load(file)["VAM_ticket_log_channel_id"]
+    
 
     async def on_submit(self, interaction):
         # Handle the submission logic here
