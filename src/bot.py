@@ -54,6 +54,9 @@ app = Flask(__name__)
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
+    if request.headers.get('Webhook-Secret') != config.get('form_webhook_secret'):
+        return "Unauthorized", 401
+    
     channel_id = FORM_LOG_CHANNEL_ID
     channel = bot.get_channel(channel_id)
     if channel:

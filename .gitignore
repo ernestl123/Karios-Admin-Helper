@@ -5,3 +5,4 @@ __pycache__/
 #Ignore config files
 config.json
 leaders.csv
+.venv/
