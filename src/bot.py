@@ -71,9 +71,8 @@ def webhook():
                     description += f"**{key}**:\n"
 
                     for x in item:
-                        description += f"▫️`{x.strip()}` "
-                    description += "\n"
-                    
+                        description += f"▫️`{x.strip()}`\n "
+
                 elif isinstance(item, list):
                     description += f"**{key}**:"
                     for x in item:
