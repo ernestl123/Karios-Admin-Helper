@@ -67,7 +67,11 @@ def webhook():
         for key, item in data['data'].items():
             if key != 'Timestamp':
                 if isinstance(item, str):
-                    description += f"**{key}**: `{item}`\n"
+                    item = item.split(',')
+                    description += f"**{key}**:\n"
+
+                    for x in item:
+                        description += f"▫️`{x.strip()}` "
                 elif isinstance(item, list):
                     description += f"**{key}**:"
                     for x in item:
