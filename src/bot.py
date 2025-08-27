@@ -16,7 +16,7 @@ FORM_LOG_CHANNEL_ID = config["form_log_channel_id"]
 VAM_TICKET_LOG_CHANNEL_ID = config["VAM_ticket_log_channel_id"]
 FORM_PORT = config["form_port"]
 
-bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=discord.Intents.all())
+bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=discord.Intents.all(), activity=discord.Game(name="Watching forms..."))
 bot.remove_command('help')
 cogs = [
     "cogs.AdminMacros"
@@ -82,7 +82,7 @@ def webhook():
     return "OK", 200
 
 def run_flask():
-    app.run(port=FORM_PORT)
+    app.run(host="0.0.0.0", port=FORM_PORT)
     
 if __name__ == '__main__':
     threading.Thread(target=run_flask, daemon=True).start()
