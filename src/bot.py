@@ -19,7 +19,8 @@ FORM_PORT = config["form_port"]
 bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=discord.Intents.all())
 bot.remove_command('help')
 cogs = [
-    "cogs.AdminMacros", "cogs.TicketSystem"
+    "cogs.AdminMacros"
+    #"cogs.TicketSystem"
 ]
 bot.VAM_TICKET_LOG_CHANNEL_ID = VAM_TICKET_LOG_CHANNEL_ID
     
@@ -30,15 +31,15 @@ async def on_ready():
     for extension in cogs:
         await bot.load_extension(f"{extension}")
     # await bot.tree.clear_commands(guild=None)  # Clear all global application commands
-    await bot.tree.sync(guild=discord.Object(id=607977353410379825))  # Sync commands for a specific guild
-    print("Tree synced.")
+    # await bot.tree.sync(guild=discord.Object(id=607977353410379825))  # Sync commands for a specific guild
+    # print("Tree synced.")
 
 
 @bot.event
 async def on_message(message):
-    return
-    # if not message.author.bot:
-        # await bot.process_commands(message)
+    
+    if not message.author.bot:
+        await bot.process_commands(message)
 """
 @bot.event
 async def on_command_error(ctx, error):
@@ -54,6 +55,7 @@ app = Flask(__name__)
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
+    print("Received webhook data:", data)
     if request.headers.get('Webhook-Secret') != config.get('form_webhook_secret'):
         return "Unauthorized", 401
     
@@ -61,10 +63,21 @@ def webhook():
     channel = bot.get_channel(channel_id)
     if channel:
         print("Sending message to channel:", channel.name, "with data:", data)
-        description = "Time: {}\n".format(
-            data['data'].get('Timestamp', 'No Time Provided')[0]
-        )
+        description = ""
+        for key, item in data['data'].items():
+            if key != 'Timestamp':
+                if isinstance(item, str):
+                    description += f"**{key}**: `{item}`\n"
+                elif isinstance(item, list):
+                    description += f"**{key}**:"
+                    for x in item:
+                        description += f"`{x}` "
+                    description += "\n"
+        
         embed = discord.Embed(title= data.get('title', 'No Form Title'), description=description, color=discord.Color.blue())
+        embed.set_footer(text="Submitted at: " + "{}".format(
+            data['data'].get('Timestamp', 'No Time Provided')
+        ))
         bot.loop.create_task(channel.send(embed=embed))
     return "OK", 200
 
