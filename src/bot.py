@@ -79,10 +79,19 @@ def webhook():
                         description += f"`{x}` "
                     description += "\n"
         
-        embed = discord.Embed(title= data.get('title', 'No Form Title'), description=description, color=discord.Color.blue())
+        form_title = data.get("title", "No Form Title")
+        embed = discord.Embed(title= form_title, description=description)
         embed.set_footer(text="Submitted at: " + "{}".format(
             data['data'].get('Timestamp', 'No Time Provided')
         ))
+
+        if form_title.lower() == "Late Rides Form":
+            embed.color = discord.Color.red()
+        elif form_title.lower() == "Rides Form":
+            embed.color = discord.Color.blue()
+        elif "driver" in form_title.lower():
+            embed.color = discord.Color.green()
+            
         bot.loop.create_task(channel.send(embed=embed))
     return "OK", 200
 
