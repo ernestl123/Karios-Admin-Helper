@@ -85,9 +85,9 @@ def webhook():
             data['data'].get('Timestamp', 'No Time Provided')
         ))
         embed.color
-        if form_title.lower() == "Late Rides Form":
+        if form_title == "Late Rides Form":
             embed.color = discord.Colour.red()
-        elif form_title.lower() == "Rides Form":
+        elif form_title == "Rides Form":
             embed.color = discord.Colour.blue()
         elif "driver" in form_title.lower():
             embed.color = discord.Colour.green()
