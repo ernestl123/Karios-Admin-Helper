@@ -1,8 +1,13 @@
 import json
+import sqlite3
 import discord
 from discord.ext import commands
-from flask import Flask, request
+from database.DBManager import DBManager
 import threading
+import requests
+
+import utils
+from webhook import start_webhook_server
 
 def load_config(path):
     with open(path, "r") as file:
@@ -15,6 +20,8 @@ PREFIX = config["prefix"]
 FORM_LOG_CHANNEL_ID = config["form_log_channel_id"]
 VAM_TICKET_LOG_CHANNEL_ID = config["VAM_ticket_log_channel_id"]
 FORM_PORT = config["form_port"]
+PCO_API_TOKEN = config.get("pc_client_id")
+PCO_API_SECRET = config.get("pc_client_secret")
 
 bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=discord.Intents.all(), activity=discord.Game(name="Watching forms..."))
 bot.remove_command('help')
@@ -40,6 +47,29 @@ async def on_message(message):
     
     if not message.author.bot:
         await bot.process_commands(message)
+
+@bot.event
+async def setup_hook():
+    # sqlite3.connect("database/kairos.db")
+    bot.db = DBManager("src/database/kairos.db")
+    try:
+        await bot.db.connect()
+        print("Connected to database.")
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
+
+@bot.event
+async def on_member_join(member):
+    # Check if the member exists in the database
+    if not await bot.db.check_member_exists(member.id):
+        print(f"Member {member.name} not found in database on join. No roles assigned.")
+        return
+    
+    grad_year, school, college = await bot.db.get_member(member.id)
+    
+    # Assign roles based on the retrieved data
+    # await utils.assign_new_member(member, member.name, school, college, grad_year, member.guild)
+    print(f"Assigned roles to {member.name} based on database info.")
 """
 @bot.event
 async def on_command_error(ctx, error):
@@ -50,55 +80,6 @@ async def on_command_error(ctx, error):
     print(error)
 """
 
-app = Flask(__name__)
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    data = request.json
-    print("Received webhook data:", data)
-    if request.headers.get('Webhook-Secret') != config.get('form_webhook_secret'):
-        return "Unauthorized", 401
-    
-    channel_id = FORM_LOG_CHANNEL_ID
-    channel = bot.get_channel(channel_id)
-    if channel:
-        print("Sending message to channel:", channel.name, "with data:", data)
-        description = ""
-        for key, item in data['data'].items():
-            if key != 'Timestamp':
-                if isinstance(item, str):
-                    item = item.split(',')
-                    description += f"**{key}**:\n"
-
-                    for x in item:
-                        if x.strip():
-                            description += f"▫️`{x.strip()}`\n "
-
-                elif isinstance(item, list):
-                    description += f"**{key}**:"
-                    for x in item:
-                        description += f"`{x}` "
-                    description += "\n"
-        
-        form_title = data.get("title", "No Form Title")
-        embed = discord.Embed(title= form_title, description=description)
-        embed.set_footer(text="Submitted at: " + "{}".format(
-            data['data'].get('Timestamp', 'No Time Provided')
-        ))
-        embed.color
-        if form_title == "Late Rides Form":
-            embed.color = discord.Colour.red()
-        elif form_title == "Rides Form":
-            embed.color = discord.Colour.blue()
-        elif "driver" in form_title.lower():
-            embed.color = discord.Colour.green()
-
-        bot.loop.create_task(channel.send(embed=embed))
-    return "OK", 200
-
-def run_flask():
-    app.run(host="0.0.0.0", port=FORM_PORT)
-    
 if __name__ == '__main__':
-    threading.Thread(target=run_flask, daemon=True).start()
+    threading.Thread(target=start_webhook_server, args=(bot, config), daemon=True).start()
     bot.run(TOKEN)

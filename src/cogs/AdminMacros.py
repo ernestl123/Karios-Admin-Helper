@@ -9,7 +9,7 @@ import json
 import csv
 
 # from cogs.utils import *  # Removed because 'cogs.utils' could not be resolved and is not used in this file
-from utils import graduate_channel, retire_channel
+from utils import graduate_channel, retire_channel, assign_new_member
 
 
 class AdminMacros(commands.Cog):
@@ -20,6 +20,66 @@ class AdminMacros(commands.Cog):
     async def cog_check(self, ctx):
         allowed_roles = {"Admin Staff", "Pastor", "Shadow Admin"}
         return any(role.name in allowed_roles for role in ctx.author.roles)
+
+    @commands.command(pass_context = True)
+    async def importCSV(self, ctx):
+        """
+        Imports member data from a CSV file attached to the command message.
+        The CSV file should have the following columns: name, discord_handle, grad_year, school, college.
+
+        Args:
+            ctx: The context of the command.
+        """
+        if not ctx.message.attachments:
+            return await ctx.send("Please attach a CSV file to the message.")
+
+        # Get the attachment (we assume only one for this example)
+        attachment = ctx.message.attachments[0]
+
+        # Validate the file type
+        if not attachment.filename.endswith(".csv"):
+            return await ctx.send("Please attach a valid CSV file.")
+
+        try:
+            # Download the attachment content as bytes
+            csv_data_bytes = await attachment.read()
+            csv_data_str = csv_data_bytes.decode('utf-8')  # Decode to string
+
+            # Use io.StringIO to treat the string as a file for the csv reader
+            csv_file = io.StringIO(csv_data_str)
+
+            # Process the CSV data
+            reader = csv.reader(csv_file)
+            next(reader)  # Skip the header row
+
+            rows_processed = 0
+            total_rows = len(list(reader))
+            csv_file.seek(0)
+            next(reader)  # Skip header again after seek
+
+            for row in reader:
+                name = row[1].strip() + " " + row[2].strip()
+                discord_handle = row[-1].strip().split("#")[0].replace('@', '')  # Remove discriminator and '@' if present
+                grad_year = row[15].strip()
+                school = row[13].strip()
+                college = row[14].strip()
+
+                guild = ctx.guild
+                discord_member = discord.utils.get(guild.members, name=discord_handle)
+                await self.bot.db.add_member(name, discord_handle, discord_member.id if discord_member else None, grad_year, school, college)
+                rows_processed += 1
+                if discord_member:
+                    await assign_new_member(discord_handle, discord_member, name, school, college, grad_year, guild)
+                    print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
+                    
+                else:
+                    print(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
+                    await ctx.send(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
+
+            await ctx.send(f"Successfully processed {rows_processed}/{total_rows} rows from the CSV file.")
+
+        except Exception as e:
+            await ctx.send(f"An error occurred while processing: " + e.with_traceback())
 
     @commands.command(pass_context = True)
     async def assignLeadership(self, ctx):

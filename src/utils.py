@@ -112,4 +112,50 @@ async def copy_role(role: discord.Role):
         return new_role
     except Exception as e:
         raise ValueError(f"Failed to copy role '{role.name}': {e}")
+
+async def assign_role(member : discord.Member, role_name : str, guild : discord.Guild):
+    """
+    Assigns a role to a member by role name.
+    Args:
+        member (discord.Member): The member to assign the role to.
+        role_name (str): The name of the role to assign.
+        guild (discord.Guild): The guild where the role exists.
     
+    Returns:
+        bool: True if the role was successfully assigned, False otherwise.
+    """
+    role = discord.utils.get(guild.roles, name=role_name)
+    if not role:
+        raise ValueError(f"Role '{role_name}' not found in guild '{guild.name}'.")
+    
+    try:
+        await member.add_roles(role, reason=f"Assigning role '{role_name}' to member '{member.name}'")
+        print(f"Assigned role '{role_name}' to member '{member.name}'.")
+        return True
+    except Exception as e:
+        raise ValueError(f"Failed to assign role '{role_name}' to member '{member.name}': {e}")
+
+async def assign_new_member(discord_member, name, school, college, grad_year, guild):
+    await discord_member.edit(nick=name)
+
+    print(f"Assigning 'Form Submitter' role to member: {discord_member.name}")
+    if await assign_role(discord_member, "Fellowship", guild):
+        print(f"Successfully assigned 'Fellowship' role to {discord_member.name}.")
+    else:
+        print(f"Failed to assign 'Fellowship' role to {discord_member.name}.")
+
+    if school:
+        if await assign_role(discord_member, school, guild):
+            print(f"Successfully assigned '{school}' role to {discord_member.name}.")
+        else:
+            print(f"Failed to assign '{school}' role to {discord_member.name}.")
+    if college:
+        if await assign_role(discord_member, college, guild):
+            print(f"Successfully assigned '{college}' role to {discord_member.name}.")
+        else:
+            print(f"Failed to assign '{college}' role to {discord_member.name}.")
+    if grad_year:
+        if await assign_role(discord_member, grad_year, guild):
+            print(f"Successfully assigned '{grad_year}' role to {discord_member.name}.")
+        else:
+            print(f"Failed to assign '{grad_year}' role to {discord_member.name}.")

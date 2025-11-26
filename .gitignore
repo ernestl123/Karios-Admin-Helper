@@ -7,3 +7,6 @@ config.json
 leaders.csv
 .venv/
 spreadsheetWebhook.gs
+
+#Ignore database files
+kairos.db
