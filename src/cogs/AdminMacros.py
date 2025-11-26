@@ -12,10 +12,10 @@ import csv
 from utils import graduate_channel, retire_channel, assign_new_member
 
 YEARS = {
-    "Class of '26": ["26", "2026", "senior", "seniors", "fourth", "4th"],
-    "Class of '27": ["27", "2027", "junior", "juniors", "third", "3rd"],
-    "Class of '28": ["28", "2028", "sophomore", "sophomores", "second", "2nd"],
-    "Class of '29": ["29", "2029", "freshman", "freshmen", "first", "1st"]
+    "Class of '26": ["26", "2026", "senior", "seniors", "fourth", "4th", "4th year"],
+    "Class of '27": ["27", "2027", "junior", "juniors", "third", "3rd", "3rd year"],
+    "Class of '28": ["28", "2028", "sophomore", "sophomores", "second", "2nd", "2nd year"],
+    "Class of '29": ["29", "2029", "freshman", "freshmen", "first", "1st", "1st year"]
 }
 
 class AdminMacros(commands.Cog):
