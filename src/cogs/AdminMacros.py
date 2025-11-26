@@ -11,6 +11,12 @@ import csv
 # from cogs.utils import *  # Removed because 'cogs.utils' could not be resolved and is not used in this file
 from utils import graduate_channel, retire_channel, assign_new_member
 
+YEARS = {
+    "Class of '26": ["26", "2026", "senior", "seniors", "fourth", "4th"],
+    "Class of '27": ["27", "2027", "junior", "juniors", "third", "3rd"],
+    "Class of '28": ["28", "2028", "sophomore", "sophomores", "second", "2nd"],
+    "Class of '29": ["29", "2029", "freshman", "freshmen", "first", "1st"]
+}
 
 class AdminMacros(commands.Cog):
     def __init__(self, bot):
@@ -64,12 +70,17 @@ class AdminMacros(commands.Cog):
                 school = row[13].strip()
                 college = row[14].strip()
 
+                for year, keywords in YEARS.items():
+                    if grad_year.lower() in keywords:
+                        grad_year = year
+                        break
+
                 guild = ctx.guild
                 discord_member = discord.utils.get(guild.members, name=discord_handle)
                 await self.bot.db.add_member(name, discord_handle, discord_member.id if discord_member else None, grad_year, school, college)
                 rows_processed += 1
                 if discord_member:
-                    await assign_new_member(discord_handle, discord_member, name, school, college, grad_year, guild)
+                    await assign_new_member(discord_member, name, school, college, grad_year, guild)
                     print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
                     
                 else:
@@ -79,7 +90,7 @@ class AdminMacros(commands.Cog):
             await ctx.send(f"Successfully processed {rows_processed}/{total_rows} rows from the CSV file.")
 
         except Exception as e:
-            await ctx.send(f"An error occurred while processing: " + e.with_traceback())
+            await ctx.send(f"An error occurred while processing: " + e)
 
     @commands.command(pass_context = True)
     async def assignLeadership(self, ctx):
