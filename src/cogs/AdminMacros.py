@@ -69,16 +69,22 @@ class AdminMacros(commands.Cog):
                 grad_year = row[15].strip()
                 school = row[13].strip()
                 college = row[14].strip()
-
+                
+                found = False
                 for year, keywords in YEARS.items():
                     if grad_year.lower() in keywords:
                         grad_year = year
+                        found = True
                         break
-
+                if not found:
+                    print(f"Could not determine graduation year for entry: {name} with grad_year value: {grad_year}. Skipping.")
+                    continue
+                
                 guild = ctx.guild
                 discord_member = discord.utils.get(guild.members, name=discord_handle)
                 await self.bot.db.add_member(name, discord_handle, discord_member.id if discord_member else None, grad_year, school, college)
                 rows_processed += 1
+                
                 if discord_member:
                     await assign_new_member(discord_member, name, school, college, grad_year, guild)
                     print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
