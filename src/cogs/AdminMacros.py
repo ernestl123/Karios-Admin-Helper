@@ -259,6 +259,43 @@ class AdminMacros(commands.Cog):
             await ctx.send(f"Updated graduation year for **{year_name}** to **{year_number}**.")
         except Exception as e:
             await ctx.send(f"An error occurred while updating graduation years: {e}")  
+    
+    @commands.command(pass_context=True)
+    async def transitionMinistry(self, ctx, ministry: str, grad_year : int):
+        """
+        Transitions a ministry role and its associated channel to a new graduation year.
+
+        Args:
+            ctx: The context of the command.
+            ministry (str): The name of the ministry role to transition.
+            grad_year (int): The last two digits of the graduation year to transition to.
+        """
+        try:
+            # Get the role object for the specified ministry
+            role_obj = self.get_role_by_name(ctx, ministry)
+            if not role_obj:
+                await ctx.send(f"Role '{ministry}' not found in the server.")
+                return
+            
+            # Transition the role
+            replaced_role = await role_utils.transition_role(role_obj, grad_year)
+            
+            # Move the associated channel to the archive category
+            channel_name = ministry.replace(" ", "-").lower()  # Replace spaces with hyphens for channel name
+            old_channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+            if not old_channel:
+                await ctx.send(f"Channel '{channel_name}' not found in the server. Cannot archive.")
+                return
+            
+            overwrites = {
+                ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                replaced_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            await channel_utils.transition_channel(old_channel, grad_year, overwrites)
+            
+            await ctx.send(f"Successfully transitioned ministry '{ministry}' and its associated channel to graduation year '{grad_year}'.")
+        except Exception as e:
+            await ctx.send(f"An error occurred during the transition process for ministry '{ministry}': {e}")
 
     @commands.command(pass_context=True)
     async def transition(self, ctx, grad_year : int):
