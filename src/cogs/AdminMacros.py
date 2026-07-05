@@ -281,7 +281,10 @@ class AdminMacros(commands.Cog):
             replaced_role = await role_utils.transition_role(role_obj, grad_year)
             
             # Move the associated channel to the archive category
-            channel_name = ministry.replace(" ", "-").lower()  # Replace spaces with hyphens for channel name
+            if ministry.lower == "VAM":
+                channel_name = "visual-arts-and-media"
+            else:
+                channel_name = ministry.replace(" ", "-").lower()  # Replace spaces with hyphens for channel name
             old_channel = discord.utils.get(ctx.guild.channels, name=channel_name)
             if not old_channel:
                 await ctx.send(f"Channel '{channel_name}' not found in the server. Cannot archive.")
