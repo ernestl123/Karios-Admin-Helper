@@ -8,6 +8,8 @@ import random
 import json
 import csv
 
+from flask import ctx
+
 # from cogs.utils import *  # Removed because 'cogs.utils' could not be resolved and is not used in this file
 import role_utils
 import channel_utils
@@ -243,7 +245,7 @@ class AdminMacros(commands.Cog):
         try:
             with open('current_years.json', 'r') as file:
                 current_years = json.load(file)
-                
+
             year_name = year_name.capitalize()  # Ensure the year name is capitalized to match the keys in the JSON file
             if year_name not in current_years:
                 await ctx.send(f"Invalid class name '{year_name}'. Valid options are: {', '.join(current_years.keys())}.")
@@ -274,114 +276,111 @@ class AdminMacros(commands.Cog):
             await ctx.send(f"Invalid graduation year '{grad_year}'. Please provide the last two digits of the year (e.g., 26 for 2026).")
             return
         
+        try:
+            #Update all the leadership roles
+            with open('roles.json', 'r') as file:
+                roles_data = json.load(file)
+            
+            log_output = "---TRANSITIONING ROLES---\n"
 
-        #Update all the leadership roles
-        with open('roles.json', 'r') as file:
-            roles_data = json.load(file)
-        
-        log_output = "---TRANSITIONING ROLES---\n"
+            roles = roles_data['roles']
+            for role_name in roles:
+                role_obj = self.get_role_by_name(ctx, role_name)
 
-        roles = roles_data['roles']
-        for role_name in roles:
-            role_obj = self.get_role_by_name(ctx, role_name)
+                try:
+                    if role_obj:
+                        #rename role
+                        replaced_role = await role_utils.transition_role(role_obj, grad_year)
+                    else:
+                        log_output += f"ERROR: Role not found: {role_name}\n"
 
-            try:
-                if role_obj:
-                    #rename role
-                    replaced_role = await role_utils.transition_role(role_obj, grad_year)
-                else:
-                    log_output += f"ERROR: Role not found: {role_name}\n"
+                    #move channel to archive category
+                    if role_name == "Prayer":
+                        channel_name = "prayer-team"
+                    else:
+                        channel_name = role_name.replace(" ", "-").lower()  # Replace spaces with hyphens for channel name
 
-                #move channel to archive category
-                if role_name == "Prayer":
-                    channel_name = "prayer-team"
-                else:
-                    channel_name = role_name.replace(" ", "-").lower()  # Replace spaces with hyphens for channel name
+                    old_channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+                    if not old_channel:
+                        log_output += f"ERROR: Channel '{channel_name}' not found in the server. Cannot archive.\n"
+                        continue
+                    
+                    overwrites = {
+                        ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                        replaced_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                    }
+                    await channel_utils.transition_channel(old_channel, grad_year, overwrites)
+                    log_output += f"SUCCESS: Moved channel '{role_name}' to archive category\n"
 
-                old_channel = discord.utils.get(ctx.guild.channels, name=channel_name)
-                if not old_channel:
-                    log_output += f"ERROR: Channel '{channel_name}' not found in the server. Cannot archive.\n"
+                except discord.Forbidden:
+                    log_output += f"ERROR: Failed to edit role '{role_name}'. Check permissions.\n"
                     continue
-                
-                overwrites = {
-                    ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    replaced_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                }
-                await channel_utils.transition_channel(old_channel, grad_year, overwrites)
-                log_output += f"SUCCESS: Moved channel '{role_name}' to archive category\n"
+            
+            log_output += "\n---DELETING SPECIAL EVENTS & SOCIAL CHANNELS---\n"
+            #Archive all channels in the special events category
+            special_events_category = discord.utils.get(ctx.guild.categories, name="Special Events & Socials")
+            for channel in special_events_category.channels:
+                await channel_utils.delete_channel(channel)
+                log_output += f"SUCCESS: Deleted channel '{channel.name}' from the server.\n"
 
-            except discord.Forbidden:
-                log_output += f"ERROR: Failed to edit role '{role_name}'. Check permissions.\n"
-                continue
-        
-        log_output += "\n---ARCHIVING SPEICAL EVENTS & SOCIAL CHANNELS---\n"
-        #Archive all channels in the special events category
-        special_events_category = discord.utils.get(ctx.guild.categories, name="Special Events & Socials")
-        for channel in special_events_category.channels:
-            if not channel.name[-2:] == str(grad_year):
-                new_channel_name = channel.name + f"-{grad_year}"
-            else:
-                new_channel_name = channel.name  # If the channel already has the grad year, keep it as is
+            # Update the current years in the JSON file
+            with open('current_years.json', 'r') as file:
+                current_years = json.load(file)
+            
+            # Update the current years in the JSON file
+            current_years["Freshman"] = int("20" + str(grad_year + 4))
+            current_years["Sophomore"] = int("20" + str(grad_year + 3))
+            current_years["Junior"] = int("20" + str(grad_year + 2))
+            current_years["Senior"] = int("20" + str(grad_year + 1))
 
-            await channel_utils.retire_channel(channel, grad_year)
-            log_output += f"SUCCESS: Moved channel '{channel.name}' to archive category and renamed it to '{new_channel_name}'.\n"
+            log_output += "\n---ARCHIVING GRADUATING CLASS CHANNEL---\n"
 
-        # Update the current years in the JSON file
-        with open('current_years.json', 'r') as file:
-            current_years = json.load(file)
-        
-        # Update the current years in the JSON file
-        current_years["Freshman"] = int("20" + str(grad_year + 4))
-        current_years["Sophomore"] = int("20" + str(grad_year + 3))
-        current_years["Junior"] = int("20" + str(grad_year + 2))
-        current_years["Senior"] = int("20" + str(grad_year + 1))
+            #Archive the grad_year chat
+            grad_year_channel = discord.utils.get(ctx.guild.channels, name=f"co-20{grad_year}")
+            if grad_year_channel:
+                await channel_utils.retire_channel(grad_year_channel, grad_year)
+                log_output += f"SUCCESS: Moved channel '{grad_year_channel.name}' to archive category. Byeeee\n"
 
-        log_output += "\n---ARCHIVING GRADUATING CLASS CHANNEL---\n"
-
-        #Archive the grad_year chat
-        grad_year_channel = discord.utils.get(ctx.guild.channels, name=f"co-20{grad_year}")
-        if grad_year_channel:
-            await channel_utils.retire_channel(grad_year_channel, grad_year)
-            log_output += f"SUCCESS: Moved channel '{grad_year_channel.name}' to archive category. Byeeee\n"
-
-        log_output += "\n---CREATING NEW CLASS ROLES AND CHANNELS---\n"
-        for year_int in current_years.values():
-            #Create a Class of '{year_int}' role if it doesn't exist
-            class_role_name = f"Class of '{str(year_int)[-2:]}"
-            class_role = discord.utils.get(ctx.guild.roles, name=class_role_name)
-            if not class_role:
-                class_role = await ctx.guild.create_role(name=class_role_name, color=discord.Color.default(), reason=f"Creating new class role for graduation year '{year_int}")
-                print(f"Created new role '{class_role_name}' for graduation year '{year_int}'.")
-                log_output += f"SUCCESS: Created new role '{class_role_name}' for graduation year '{year_int}'.\n"
-            else:
-                log_output += f"INFO: Role '{class_role_name}' already exists. Skipping creation.\n"
-
-            #Make a co-{year_int} channel if it doesn't exist
-            co_channel_name = f"co-{str(year_int)}"
-            co_channel = discord.utils.get(ctx.guild.channels, name=co_channel_name)
-
-            if not co_channel:
-                #Define permissions for the new channel
-                overwrites = {
-                    ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    class_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                }
-
-                # Create the channel in the same category as the Leadership channels
-                class_chat_category = discord.utils.get(ctx.guild.categories, name="Class Chat")
-                if class_chat_category:
-                    await ctx.guild.create_text_channel(name=co_channel_name, category=class_chat_category, overwrites=overwrites)
-                    log_output += f"SUCCESS: Created new channel '{co_channel_name}' in Class Chat category.\n"
+            log_output += "\n---CREATING NEW CLASS ROLES AND CHANNELS---\n"
+            for year_int in current_years.values():
+                #Create a Class of '{year_int}' role if it doesn't exist
+                class_role_name = f"Class of '{str(year_int)[-2:]}"
+                class_role = discord.utils.get(ctx.guild.roles, name=class_role_name)
+                if not class_role:
+                    class_role = await ctx.guild.create_role(name=class_role_name, color=discord.Color.default(), reason=f"Creating new class role for graduation year '{year_int}")
+                    print(f"Created new role '{class_role_name}' for graduation year '{year_int}'.")
+                    log_output += f"SUCCESS: Created new role '{class_role_name}' for graduation year '{year_int}'.\n"
                 else:
-                    log_output += "ERROR: Class Chat category not found. Cannot create college class channel. Please create the category first.\n"
-            else:
-                log_output += f"INFO: Channel '{co_channel_name}' already exists. Skipping creation. We gucci\n"
+                    log_output += f"INFO: Role '{class_role_name}' already exists. Skipping creation.\n"
 
-        with open('current_years.json', 'w') as file:
-            json.dump(current_years, file, indent=4)
-        
-        await ctx.send(f"Transition process for graduation year {grad_year-1}'-{grad_year}' completed successfully. Please check log for details.")
-        await ctx.send(embed = discord.Embed(title="Transition Logs", description=log_output))
+                #Make a co-{year_int} channel if it doesn't exist
+                co_channel_name = f"co-{str(year_int)}"
+                co_channel = discord.utils.get(ctx.guild.channels, name=co_channel_name)
+
+                if not co_channel:
+                    #Define permissions for the new channel
+                    overwrites = {
+                        ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                        class_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                    }
+
+                    # Create the channel in the same category as the Leadership channels
+                    class_chat_category = discord.utils.get(ctx.guild.categories, name="Class Chat")
+                    if class_chat_category:
+                        await ctx.guild.create_text_channel(name=co_channel_name, category=class_chat_category, overwrites=overwrites)
+                        log_output += f"SUCCESS: Created new channel '{co_channel_name}' in Class Chat category.\n"
+                    else:
+                        log_output += "ERROR: Class Chat category not found. Cannot create college class channel. Please create the category first.\n"
+                else:
+                    log_output += f"INFO: Channel '{co_channel_name}' already exists. Skipping creation. We gucci\n"
+
+            with open('current_years.json', 'w') as file:
+                json.dump(current_years, file, indent=4)
+            
+            await ctx.send(f"Transition process for graduation year {grad_year-1}'-{grad_year}' completed successfully. Please check log for details.")
+            await ctx.send(embed = discord.Embed(title="Transition Logs", description=log_output))
+        except Exception as e:
+            await ctx.send(f"An error occurred during the transition process: {e}")
 
     
 async def setup(bot):
