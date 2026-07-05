@@ -285,6 +285,8 @@ class AdminMacros(commands.Cog):
 
             roles = roles_data['roles']
             for role_name in roles:
+                if role_name == "Visual Arts and Media":
+                    role_name = "VAM"
                 role_obj = self.get_role_by_name(ctx, role_name)
 
                 try:
