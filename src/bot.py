@@ -2,11 +2,9 @@ import json
 import sqlite3
 import discord
 from discord.ext import commands
-from database.DBManager import DBManager
 import threading
 import requests
 
-import utils
 from webhook import start_webhook_server
 
 def load_config(path):
@@ -27,7 +25,6 @@ bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=di
 bot.remove_command('help')
 cogs = [
     "cogs.AdminMacros"
-    #"cogs.TicketSystem"
 ]
 bot.VAM_TICKET_LOG_CHANNEL_ID = VAM_TICKET_LOG_CHANNEL_ID
     
@@ -48,28 +45,28 @@ async def on_message(message):
     if not message.author.bot:
         await bot.process_commands(message)
 
-@bot.event
-async def setup_hook():
-    # sqlite3.connect("database/kairos.db")
-    bot.db = DBManager("src/database/kairos.db")
-    try:
-        await bot.db.connect()
-        print("Connected to database.")
-    except Exception as e:
-        print(f"Error connecting to database: {e}")
+# @bot.event
+# async def setup_hook():
+#     # sqlite3.connect("database/kairos.db")
+#     bot.db = DBManager("src/database/kairos.db")
+#     try:
+#         await bot.db.connect()
+#         print("Connected to database.")
+#     except Exception as e:
+#         print(f"Error connecting to database: {e}")
 
-@bot.event
-async def on_member_join(member):
-    # Check if the member exists in the database
-    if not await bot.db.check_member_exists(member.id):
-        print(f"Member {member.name} not found in database on join. No roles assigned.")
-        return
+# @bot.event
+# async def on_member_join(member):
+#     # Check if the member exists in the database
+#     if not await bot.db.check_member_exists(member.id):
+#         print(f"Member {member.name} not found in database on join. No roles assigned.")
+#         return
     
-    grad_year, school, college = await bot.db.get_member(member.id)
+#     grad_year, school, college = await bot.db.get_member(member.id)
     
-    # Assign roles based on the retrieved data
-    # await utils.assign_new_member(member, member.name, school, college, grad_year, member.guild)
-    print(f"Assigned roles to {member.name} based on database info.")
+#     # Assign roles based on the retrieved data
+#     # await utils.assign_new_member(member, member.name, school, college, grad_year, member.guild)
+#     print(f"Assigned roles to {member.name} based on database info.")
 """
 @bot.event
 async def on_command_error(ctx, error):

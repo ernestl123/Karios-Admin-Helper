@@ -2,8 +2,8 @@ import json
 from flask import Flask, request
 import requests
 import discord
-from utils import assign_role
-import utils
+# from utils import assign_role
+# import utils
 CURRENT_YEAR = 25
 
 YEAR_DICT ={
@@ -34,98 +34,98 @@ def start_webhook_server(bot, config):
         data = form_data.get('data', [])
         return data
     
-    @app.route('/planning-center', methods=['POST'])
-    def planning_center_webhook():
-        """Receives the initial webhook and makes two API call for name and form data."""
-        try:
-            #Parse the incoming webhook payload
-            payload = request.get_json()
-            if not payload:
-                print("Received an empty or invalid JSON payload.")
-                return "Bad Request", 400
+    # @app.route('/planning-center', methods=['POST'])
+    # def planning_center_webhook():
+    #     """Receives the initial webhook and makes two API call for name and form data."""
+    #     try:
+    #         #Parse the incoming webhook payload
+    #         payload = request.get_json()
+    #         if not payload:
+    #             print("Received an empty or invalid JSON payload.")
+    #             return "Bad Request", 400
 
-            #print("Webhook received. Payload:")
-            # print(json.dumps(payload, indent=2))
+    #         #print("Webhook received. Payload:")
+    #         # print(json.dumps(payload, indent=2))
 
-            # Extract the URL for the new form submission
-            # The payload contains links, not the form data itself.
-            # payload['data'] is a list of event deliveries; take the first event
-            events = payload.get('data') or []
-            if not events:
-                print("No events found in payload.")
-                return "Malformed Payload", 400
+    #         # Extract the URL for the new form submission
+    #         # The payload contains links, not the form data itself.
+    #         # payload['data'] is a list of event deliveries; take the first event
+    #         events = payload.get('data') or []
+    #         if not events:
+    #             print("No events found in payload.")
+    #             return "Malformed Payload", 400
 
-            event0 = events[0]
-            attributes = event0.get('attributes', {})
-            # attributes['payload'] is a JSON string — parse it
-            payload_str = attributes.get('payload')
-            if not payload_str:
-                print("No nested payload string found in attributes.")
-                return "Malformed Payload", 400
+    #         event0 = events[0]
+    #         attributes = event0.get('attributes', {})
+    #         # attributes['payload'] is a JSON string — parse it
+    #         payload_str = attributes.get('payload')
+    #         if not payload_str:
+    #             print("No nested payload string found in attributes.")
+    #             return "Malformed Payload", 400
 
-            try:
-                nested = json.loads(payload_str)
-            except json.JSONDecodeError as je:
-                print("Failed to parse nested payload JSON:", je)
-                return "Malformed Nested Payload", 400
+    #         try:
+    #             nested = json.loads(payload_str)
+    #         except json.JSONDecodeError as je:
+    #             print("Failed to parse nested payload JSON:", je)
+    #             return "Malformed Nested Payload", 400
 
-            #print("Parsed nested payload:")
-            # print(json.dumps(nested, indent=2))
+    #         #print("Parsed nested payload:")
+    #         # print(json.dumps(nested, indent=2))
 
-            form_submission_url = nested.get('data', {}).get('links', {}).get('form_submission_values')
+    #         form_submission_url = nested.get('data', {}).get('links', {}).get('form_submission_values')
 
-            if not form_submission_url:
-                print("Webhook payload did not contain a valid form submission URL.")
-                return "Malformed Payload", 400
+    #         if not form_submission_url:
+    #             print("Webhook payload did not contain a valid form submission URL.")
+    #             return "Malformed Payload", 400
             
-            #Make first API call to get person's name
-            people_url = form_submission_url.split("/form_submissions/")[0]
-            print("Sending request on to Planning Center API.: " + people_url)
-            data = send_request(people_url)
-            if data:
-                first_name = data.get('attributes', {}).get('first_name', {})
-                last_name = data.get('attributes', {}).get('last_name', {})
+    #         #Make first API call to get person's name
+    #         people_url = form_submission_url.split("/form_submissions/")[0]
+    #         print("Sending request on to Planning Center API.: " + people_url)
+    #         data = send_request(people_url)
+    #         if data:
+    #             first_name = data.get('attributes', {}).get('first_name', {})
+    #             last_name = data.get('attributes', {}).get('last_name', {})
 
-                name = first_name + " " + last_name
+    #             name = first_name + " " + last_name
 
-            #Make second API call to get Discord handle
-            print(f"Fetching form data from: {form_submission_url}")
-            data = send_request(form_submission_url)
-            #rint(json.dumps(data, indent=2))
-            if data:
-                for item in data:
-                    print(item.get('attributes', {}).get('display_value', {}))
-                school = data[-1].get('attributes', {}).get('display_value', {})
-                college = data[-8].get('attributes', {}).get('display_value', {})
-                year = data[-11].get('attributes', {}).get('display_value', {}).lower()
+    #         #Make second API call to get Discord handle
+    #         print(f"Fetching form data from: {form_submission_url}")
+    #         data = send_request(form_submission_url)
+    #         #rint(json.dumps(data, indent=2))
+    #         if data:
+    #             for item in data:
+    #                 print(item.get('attributes', {}).get('display_value', {}))
+    #             school = data[-1].get('attributes', {}).get('display_value', {})
+    #             college = data[-8].get('attributes', {}).get('display_value', {})
+    #             year = data[-11].get('attributes', {}).get('display_value', {}).lower()
                 
-                grad_year = None
-                for key, values in YEAR_DICT.items():
-                    if year in values:
-                        grad_year = f"Class of '{key}"
-                        break
+    #             grad_year = None
+    #             for key, values in YEAR_DICT.items():
+    #                 if year in values:
+    #                     grad_year = f"Class of '{key}"
+    #                     break
 
-                discord_handle = data[-3].get('attributes', {}).get('display_value', {})
+    #             discord_handle = data[-3].get('attributes', {}).get('display_value', {})
                 
             
-            # Store member info in the database
-            guild = bot.get_guild(GUILD_ID)
-            discord_member = discord.utils.get(guild.members, name=discord_handle)
-            if discord_member:
-                bot.loop.create_task(bot.db.add_member(name, discord_member.id, grad_year, school, college))
-                bot.loop.create_task(utils.assign_new_member(discord_member, name, school, college, grad_year, guild))
-                print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
-            else:
-                print(f"Could not find Discord ID for handle: {name}. Member info not stored.")
+    #         # Store member info in the database
+    #         guild = bot.get_guild(GUILD_ID)
+    #         discord_member = discord.utils.get(guild.members, name=discord_handle)
+    #         if discord_member:
+    #             bot.loop.create_task(bot.db.add_member(name, discord_member.id, grad_year, school, college))
+    #             bot.loop.create_task(utils.assign_new_member(discord_member, name, school, college, grad_year, guild))
+    #             print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
+    #         else:
+    #             print(f"Could not find Discord ID for handle: {name}. Member info not stored.")
 
-            return "Webhook processed successfully!", 200
+    #         return "Webhook processed successfully!", 200
 
-        except requests.exceptions.RequestException as e:
-            print(f"Error making API request to Planning Center: {e}")
-            return "API Error", 500
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            return "Internal Server Error", 500
+    #     except requests.exceptions.RequestException as e:
+    #         print(f"Error making API request to Planning Center: {e}")
+    #         return "API Error", 500
+    #     except Exception as e:
+    #         print(f"An unexpected error occurred: {e}")
+    #         return "Internal Server Error", 500
 
     @app.route('/webhook', methods=['POST'])
     def form_webhook():
