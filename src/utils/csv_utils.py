@@ -45,6 +45,8 @@ async def mass_migrate_csv(reader: csv.DictReader, guild: discord.Guild):
         for team in teams:
             if team == "Life Group":
                 team = "Life Group Leader"
+            if team == "A/V":
+                team = "Worship"
                 
             role = discord.utils.get(guild.roles, name=team)
             if not role:
@@ -53,7 +55,7 @@ async def mass_migrate_csv(reader: csv.DictReader, guild: discord.Guild):
             
             try:
                 await member.add_roles(role, reason=f"Assigning role '{team}' to member '{member.name}' from CSV migration")
-                success_output += f"✅Assigned role '{team}' to member '{member.name}'.\n"
+                success_output += f"✅Assigned role '{team}' to '{name}'.\n"
             except Exception as e:
                 error_output += f"🛑Failed to assign role '{team}' to member. Manual assignment required for '{member.name}': {e}\n"
 
