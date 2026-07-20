@@ -148,16 +148,17 @@ class AdminMacros(commands.Cog):
             file_bytes = await attachment.read()
             csv_text = file_bytes.decode('utf-8')
             reader = csv.DictReader(io.StringIO(csv_text))
-            output = await csv_utils.mass_migrate_csv(reader, ctx.guild)
+            error_out, success_out = await csv_utils.mass_migrate_csv(reader, ctx.guild)
             
-            if len(output) > 4000:
-                # If the output is too long, send it as a file
-                with open("migration_output.txt", "w", encoding="utf-8") as f:
-                    f.write(output)
-                await ctx.send("The output was too long, so it has been sent as a file.", file=discord.File("migration_output.txt"))
-                os.remove("migration_output.txt")  # Clean up the temporary file
-            else:
-                await ctx.send(embed = discord.Embed(description=output))
+            for output in [error_out, success_out]:
+                if len(output) > 4000:
+                    # If the output is too long, send it as a file
+                    with open("migration_output.txt", "w", encoding="utf-8") as f:
+                        f.write(output)
+                    await ctx.send("The output was too long, so it has been sent as a file.", file=discord.File("migration_output.txt"))
+                    os.remove("migration_output.txt")  # Clean up the temporary file
+                else:
+                    await ctx.send(embed = discord.Embed(description=output))
         except Exception as e:
             await ctx.send(f"An error occurred while processing the CSV file: {e}")
 
