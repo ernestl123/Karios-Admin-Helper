@@ -147,8 +147,8 @@ class AdminMacros(commands.Cog):
         try:
             file_bytes = await attachment.read()
             csv_text = file_bytes.decode('utf-8')
-
-            output = await csv_utils.mass_migrate_csv(io.StringIO(csv_text), ctx.guild)
+            reader = csv.DictReader(io.StringIO(csv_text))
+            output = await csv_utils.mass_migrate_csv(reader, ctx.guild)
             await ctx.send(embed = discord.Embed(description=output))
         except Exception as e:
             await ctx.send(f"An error occurred while processing the CSV file: {e}")

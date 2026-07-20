@@ -14,17 +14,15 @@ def read_csv(file_path: str):
         return [row for row in reader]
     
 
-async def mass_migrate_csv(file_path: str, guild: discord.Guild):
+async def mass_migrate_csv(reader: csv.DictReader, guild: discord.Guild):
     """
     Args:
-        file_path (str): The path to the CSV file.
+        reader (csv.DictReader): The CSV reader object.
         guild (discord.Guild): The guild to migrate users to.
 
     Returns:
         str: A summary of the migration process.
     """
-
-    reader = read_csv(file_path)
     output = ""
 
     for row in reader:
