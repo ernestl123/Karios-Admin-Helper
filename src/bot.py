@@ -21,6 +21,7 @@ FORM_PORT = config["form_port"]
 PCO_API_TOKEN = config.get("pc_client_id")
 PCO_API_SECRET = config.get("pc_client_secret")
 
+
 bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=discord.Intents.all(), activity=discord.Game(name="Watching forms..."))
 bot.remove_command('help')
 cogs = [

@@ -6,7 +6,8 @@
 	"Life Group Leaders",
 	"Prayer",
 	"Inreach",
-	"Hospitality"
+	"Hospitality",
+	"Outreach"
   ],
 
   "test_roles": [
@@ -15,5 +16,11 @@
 	"b",
 	"c",
 	"d"
-  ]
+  ],
+
+  "role_info" : {
+	"Staff_Role_Name" : "Staff",
+	"Visual_Arts_and_Media_Role_Name" : "VAM",
+	"Admin_Access_Roles" : ["Admin Staff", "Pastor", "Shadow Admin"]
+  }
 }

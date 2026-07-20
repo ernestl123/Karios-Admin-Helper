@@ -10,9 +10,9 @@ import csv
 
 from flask import ctx
 
-# from cogs.utils import *  # Removed because 'cogs.utils' could not be resolved and is not used in this file
-import role_utils
-import channel_utils
+import utils.role_utils as role_utils
+import utils.channel_utils as channel_utils
+import utils.csv_utils as csv_utils
 
 YEARS = {
     "Class of '26": ["26", "2026", "senior", "seniors", "fourth", "4th", "4th year", '4'],
@@ -20,18 +20,113 @@ YEARS = {
     "Class of '28": ["28", "2028", "sophomore", "sophomores", "second", "2nd", "2nd year", '2'],
     "Class of '29": ["29", "2029", "freshman", "freshmen", "first", "1st", "1st year", '1']
 }
+with open("roles.json", "r") as file:
+    role_file = json.load(file)
+    ROLE_DATA = role_file["roles"]
+    BOT_ADMIN_PERM = role_file["role_info"]["Admin_Access_Roles"]
+    STAFF_ROLE_NAME = role_file["role_info"]["Staff_Role_Name"]
+    VAM_ROLE_NAME = role_file["role_info"]["Visual_Arts_and_Media_Role_Name"]
 
 class AdminMacros(commands.Cog):
     def __init__(self, bot):
         self.bot = bot 
         self.__cog_check__ = self.cog_check
+
+        with open("roles.json", "r") as file:
+            self.roles_data = json.load(file)["roles"]
     
     async def cog_check(self, ctx):
-        allowed_roles = {"Admin Staff", "Pastor", "Shadow Admin"}
+        allowed_roles = set(BOT_ADMIN_PERM)
         return any(role.name in allowed_roles for role in ctx.author.roles)
 
+    @commands.command(pass_context=True)
+    async def giveRole(self, ctx, role_name: str, member_name: str):
+        """
+        Assigns a role to a member in the server.
+
+        Args:
+            ctx: The context of the command.
+            role_name (str): The name of the role to assign.
+            member_name (str): The name of the member to whom the role will be assigned.
+        """
+        try:
+            await role_utils.give_role(ctx, role_name, member_name)
+        except ValueError as e:
+            await ctx.send(f"Error: {e}")
+
+    @commands.command(pass_context=True)
+    async def giveStaff(self, ctx, member: discord.Member):
+        """
+        Assigns the 'Staff' role to a member in the server.
+
+        Args:
+            ctx: The context of the command.
+            member (discord.Member): The member to whom the 'Staff' role will be assigned.
+        """
+        try:
+            await role_utils.give_role(ctx, member, STAFF_ROLE_NAME)
+        except ValueError as e:
+            await ctx.send(f"Error: {e}")
+    
+    @commands.command(pass_context=True)
+    async def onboardStaff(self, ctx, member: discord.Member, *roles : str):
+        """
+        Onboards a new staff member by assigning the 'Staff' role and sending them a welcome message.
+
+        Args:
+            ctx: The context of the command.
+            member (discord.Member): The member to onboard.
+            *roles (str): The roles to assign to the member separated by spaces.
+        """
+        roles = " ".join(roles)
+        try:
+            await role_utils.give_role(ctx, member, STAFF_ROLE_NAME)
+        except ValueError as e:
+            await ctx.send(f"Error assigning '{STAFF_ROLE_NAME}' role: {e}")
+            
+        for role in roles:
+            try:
+                await role_utils.give_role(ctx, member, role)
+            except ValueError as e:
+                await ctx.send(f"Error assigning role '{role}': {e}")
+        
+        await ctx.send(f"User {member.mention} has been onboarded with the '{STAFF_ROLE_NAME}' role and the following additional roles: {roles}.")
+    
+    @commands.command(pass_context=True)
+    async def offboardStaff(self, ctx, member: discord.Member, notify_staff_channel: bool = True):
+        """
+        Offboards a staff member by removing the 'Staff' role and sending them a farewell message.
+
+        Args:
+            ctx: The context of the command.
+            member (discord.Member): The member to offboard.
+        """
+        try:
+            await role_utils.remove_role(ctx, member, STAFF_ROLE_NAME)
+            await ctx.send(f"User {member.mention} has been offboarded and the '{STAFF_ROLE_NAME}' role has been removed.")
+        except ValueError as e:
+            await ctx.send(f"Error removing '{STAFF_ROLE_NAME}' role: {e}")
+        
+        removed_roles = [STAFF_ROLE_NAME]
+        for role in member.roles:
+            if role.name in self.roles_data:
+                try:
+                    await role_utils.remove_role(ctx, member, role.name)
+                except ValueError as e:
+                    await ctx.send(f"Error removing role '{role.name}': {e}")
+                removed_roles.append(role.name)
+        
+        if notify_staff_channel:
+            staff_channel = discord.utils.get(ctx.guild.text_channels, name="staff")
+            if staff_channel:
+                await staff_channel.send(f"Goodbye forever {member.mention}. Thank you for your service 🫡. Hopefully most of us will miss you!")
+            else:
+                await ctx.send("Staff channel not found. Please create a channel named 'staff' to receive notifications about offboarding.")
+
+        await ctx.send(f"User {member.mention} has been offboarded and the following roles have been removed: {', '.join(removed_roles)}.")
+
     @commands.command(pass_context = True)
-    async def importCSV(self, ctx):
+    async def updateLeadership(self, ctx):
         """
         Imports member data from a CSV file attached to the command message.
         The CSV file should have the following columns: name, discord_handle, grad_year, school, college.
@@ -50,56 +145,65 @@ class AdminMacros(commands.Cog):
             return await ctx.send("Please attach a valid CSV file.")
 
         try:
-            # Download the attachment content as bytes
-            csv_data_bytes = await attachment.read()
-            csv_data_str = csv_data_bytes.decode('utf-8')  # Decode to string
+            file_bytes = await attachment.read()
+            csv_text = file_bytes.decode('utf-8')
 
-            # Use io.StringIO to treat the string as a file for the csv reader
-            csv_file = io.StringIO(csv_data_str)
-
-            # Process the CSV data
-            reader = csv.reader(csv_file)
-            next(reader)  # Skip the header row
-
-            rows_processed = 0
-            total_rows = len(list(reader))
-            csv_file.seek(0)
-            next(reader)  # Skip header again after seek
-
-            for row in reader:
-                name = row[1].strip() + " " + row[2].strip()
-                discord_handle = row[-1].strip().split("#")[0].replace('@', '')  # Remove discriminator and '@' if present
-                grad_year = row[15].strip()
-                school = row[13].strip()
-                college = row[14].strip()
-                
-                found = False
-                for year, keywords in YEARS.items():
-                    if grad_year.lower() in keywords:
-                        grad_year = year
-                        found = True
-                        break
-                if not found:
-                    print(f"Could not determine graduation year for entry: {name} with grad_year value: {grad_year}. Skipping.")
-                    continue
-
-                guild = ctx.guild
-                discord_member = discord.utils.get(guild.members, name=discord_handle)
-                await self.bot.db.add_member(name, discord_handle, discord_member.id if discord_member else None, grad_year, school, college)
-                rows_processed += 1
-                
-                if discord_member:
-                    await role_utils.assign_new_member(discord_member, name, school, college, grad_year, guild)
-                    print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
-                    
-                else:
-                    print(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
-                    await ctx.send(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
-
-            await ctx.send(f"Successfully processed {rows_processed}/{total_rows} rows from the CSV file.")
-
+            output = await csv_utils.mass_migrate_csv(csv_text, ctx.guild)
+            await ctx.send(embed = discord.Embed(description=output))
         except Exception as e:
-            await ctx.send(f"An error occurred while processing: " + e)
+            await ctx.send(f"An error occurred while processing the CSV file: {e}")
+
+        # try:
+        #     # Download the attachment content as bytes
+        #     csv_data_bytes = await attachment.read()
+        #     csv_data_str = csv_data_bytes.decode('utf-8')  # Decode to string
+
+        #     # Use io.StringIO to treat the string as a file for the csv reader
+        #     csv_file = io.StringIO(csv_data_str)
+
+        #     # Process the CSV data
+        #     reader = csv.reader(csv_file)
+        #     next(reader)  # Skip the header row
+
+        #     rows_processed = 0
+        #     total_rows = len(list(reader))
+        #     csv_file.seek(0)
+        #     next(reader)  # Skip header again after seek
+
+        #     for row in reader:
+        #         name = row[1].strip() + " " + row[2].strip()
+        #         discord_handle = row[-1].strip().split("#")[0].replace('@', '')  # Remove discriminator and '@' if present
+        #         grad_year = row[15].strip()
+        #         school = row[13].strip()
+        #         college = row[14].strip()
+                
+        #         found = False
+        #         for year, keywords in YEARS.items():
+        #             if grad_year.lower() in keywords:
+        #                 grad_year = year
+        #                 found = True
+        #                 break
+        #         if not found:
+        #             print(f"Could not determine graduation year for entry: {name} with grad_year value: {grad_year}. Skipping.")
+        #             continue
+
+        #         guild = ctx.guild
+        #         discord_member = discord.utils.get(guild.members, name=discord_handle)
+        #         await self.bot.db.add_member(name, discord_handle, discord_member.id if discord_member else None, grad_year, school, college)
+        #         rows_processed += 1
+                
+        #         if discord_member:
+        #             await role_utils.assign_new_member(discord_member, name, school, college, grad_year, guild)
+        #             print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
+                    
+        #         else:
+        #             print(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
+        #             await ctx.send(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
+
+        #     await ctx.send(f"Successfully processed {rows_processed}/{total_rows} rows from the CSV file.")
+
+        # except Exception as e:
+        #     await ctx.send(f"An error occurred while processing: " + e)
 
     @commands.command(pass_context = True)
     async def assignLeadership(self, ctx):
@@ -316,14 +420,16 @@ class AdminMacros(commands.Cog):
             await ctx.send(f"Invalid graduation year '{grad_year}'. Please provide the last two digits of the year (e.g., 26 for 2026).")
             return
         
+        channel_count = ctx.guild.text_channels
+        if len(channel_count) > 40:
+            await ctx.send(f"Warning: The server has {len(channel_count)} channels. Please delete some channels before running the transition to avoid hitting Discord's channel limit.")
+            return
         try:
             #Update all the leadership roles
-            with open('roles.json', 'r') as file:
-                roles_data = json.load(file)
             
             log_output = "---TRANSITIONING ROLES---\n"
 
-            roles = roles_data['roles']
+            roles = ROLE_DATA
             for role_name in roles:
                 if role_name == "Visual Arts and Media":
                     role_name = "VAM"
