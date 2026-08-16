@@ -26,7 +26,7 @@ bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=di
 bot.remove_command('help')
 cogs = [
     "cogs.AdminMacros",
-    "cogs.help"
+    "cogs.HelpCog"
 ]
 bot.VAM_TICKET_LOG_CHANNEL_ID = VAM_TICKET_LOG_CHANNEL_ID
     
