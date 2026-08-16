@@ -494,7 +494,7 @@ class AdminMacros(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred during the transition process: {e}")
 
-    @commands.command(pass_context=True, aliases=['approve', 'approveleader', 'al'])
+    @commands.command(pass_context=True, aliases=['approve', 'approveleader', 'al'], help="Approves a member as a leader and assigns them the 'Leadership' role along with specified ministry roles. Usage: !approveLeader \"username or nickname\" ministry1 ministry2 ...")
     async def approveLeader(self, ctx, member: discord.Member, *ministries: str):
         """
         Approves a member as a leader by assigning them the 'Leadership' role.
@@ -509,8 +509,6 @@ class AdminMacros(commands.Cog):
         #Check for invalid ministries in the list
         err_str = ""
         for m in m_list:
-            if m == "VAM":
-                m = "Visual Arts and Media"
             if m.capitalize() not in ROLE_DATA:
                 err_str += f"ERROR: Ministry '{m}' not found in the server. Please check the ministry name and try again.\n"
 
@@ -570,6 +568,7 @@ class AdminMacros(commands.Cog):
                 description=f"{member.mention} has been approved as a leader for the following ministries: \n{', '.join(ministries)}.",
                 color=discord.Color.green()
             )
+            embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
             embed.set_footer(text = "Please react with any emoji to acknowledge this notification.")
             await staff_channel.send(f"{mention_str}", embed=embed)
             #await staff_channel.send(embed=embed)
