@@ -531,6 +531,11 @@ class AdminMacros(commands.Cog):
             if event.content.lower() == 'no':
                 await ctx.send(f"Approval process for {member.mention} has been cancelled.")
                 return
+            elif event.content.lower() == 'yes':
+                await ctx.send(f"Proceeding with the approval process for {member.mention}.")
+            else:
+                await ctx.send(f"Invalid response. Approval process for {member.mention} has been cancelled.")
+                return
         except asyncio.TimeoutError:
             await ctx.send(f"Approval process for {member.mention} has timed out. Please try again.")
             return
@@ -543,12 +548,17 @@ class AdminMacros(commands.Cog):
         else:
             await ctx.send("ERROR: 'Leadership' role not found in the server. Please create the role and try again.")
 
+        mention_str = ""
         for ministry in ministries:
+            if ministry != "VAM":
+                ministry = ministry.capitalize()
+
             #Assign ministry role
             role_obj = discord.utils.get(ctx.guild.roles, name=ministry)
             if role_obj:
                 await member.add_roles(role_obj)
                 await ctx.send(f"Successfully assigned the '{ministry}' role to {member.mention}.")
+                mention_str += f"{role_obj.mention} "
             else:
                 await ctx.send(f"ERROR: Role '{ministry}' not found in the server. Please create the role and try again.")
 
@@ -561,7 +571,8 @@ class AdminMacros(commands.Cog):
                 color=discord.Color.green()
             )
             embed.set_footer(text = "Please react with any emoji to acknowledge this notification.")
-            await staff_channel.send(embed=embed)
+            await staff_channel.send(f"{mention_str}", embed=embed)
+            #await staff_channel.send(embed=embed)
         else:
             await ctx.send("ERROR: 'new-leaders-notifications' channel not found in the server. Please create the channel and try again.")
 async def setup(bot):
