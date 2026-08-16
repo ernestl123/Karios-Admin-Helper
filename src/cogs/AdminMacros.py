@@ -39,7 +39,7 @@ class AdminMacros(commands.Cog):
         allowed_roles = set(BOT_ADMIN_PERM)
         return any(role.name in allowed_roles for role in ctx.author.roles)
 
-    @commands.command(pass_context=True, help="Assigns a role to a member in the server. Usage: giveRole \"role_name\" \"member_name\"")
+    @commands.command(pass_context=True, help="Assigns a role to a member in the server.\nUsage: giveRole \"role_name\" \"member_name\"")
     async def giveRole(self, ctx, role_name: str, member_name: str):
         """
         Assigns a role to a member in the server.
@@ -68,7 +68,7 @@ class AdminMacros(commands.Cog):
         except ValueError as e:
             await ctx.send(f"Error: {e}")
     
-    @commands.command(pass_context=True, help="Onboards a new staff member by assigning the 'Staff' role and any additional specified roles. Usage: onboardStaff @member role1 role2 ...")
+    @commands.command(pass_context=True, help="Onboards a new staff member by assigning the 'Staff' role and any additional specified roles.\nUsage: onboardStaff @member role1 role2 ...")
     async def onboardStaff(self, ctx, member: discord.Member, *roles : str):
         """
         Onboards a new staff member by assigning the 'Staff' role and sending them a welcome message.
@@ -92,7 +92,7 @@ class AdminMacros(commands.Cog):
         
         await ctx.send(f"User {member.mention} has been onboarded with the '{STAFF_ROLE_NAME}' role and the following additional roles: {roles}.")
     
-    @commands.command(pass_context=True, help="Offboards a staff member by removing the 'Staff' role and any additional specified roles. Usage: offboardStaff @member")
+    @commands.command(pass_context=True, help="Offboards a staff member by removing the 'Staff' role and any additional specified roles.\nUsage: offboardStaff @member")
     async def offboardStaff(self, ctx, member: discord.Member, notify_staff_channel: bool = True):
         """
         Offboards a staff member by removing the 'Staff' role and sending them a farewell message.
@@ -125,7 +125,7 @@ class AdminMacros(commands.Cog):
 
         await ctx.send(f"User {member.mention} has been offboarded and the following roles have been removed: {', '.join(removed_roles)}.")
 
-    @commands.command(pass_context = True, help="Updates the leadership information based on a CSV file. Usage: updateLeadership")
+    @commands.command(pass_context = True, help="Updates the leadership information based on a CSV file.\nUsage: updateLeadership")
     async def updateLeadership(self, ctx):
         """
         Imports member data from a CSV file attached to the command message.
@@ -169,7 +169,7 @@ class AdminMacros(commands.Cog):
             writer.writeheader()
             writer.writerows(reader)
 
-    @commands.command(pass_context = True, help="Assigns leadership roles to members based on a CSV file. Usage: assignLeadership")
+    @commands.command(pass_context = True, help="Assigns leadership roles to members based on a CSV file.\nUsage: assignLeadership")
     async def assignLeadership(self, ctx):
         """
         Assigns roles to members based on a CSV file attached to the command message.
@@ -249,21 +249,21 @@ class AdminMacros(commands.Cog):
         )
         return member
 
-    @commands.command(pass_context=True, help="Transitions a channel to the archived category. Usage: transitionChannel \"channel_name\" grad_year")
+    @commands.command(pass_context=True, help="Transitions a channel to the archived category.\nUsage: transitionChannel \"channel_name\" grad_year")
     async def transitionChannel(self, ctx, channel_name : str, grad_year : int,):
         if await channel_utils.transition_channel(ctx, channel_name, grad_year):
             await ctx.send(f"Old channel '{channel_name}' retired to Archived category and new copy created.")
         else:
             await ctx.send(f"Failed to process channel '{channel_name}'. Please check the logs for more details.")
 
-    @commands.command(pass_context=True, help="Retires a channel to the archived category. Usage: retireChannel \"channel_name\" grad_year")
+    @commands.command(pass_context=True, help="Retires a channel to the archived category.\nUsage: retireChannel \"channel_name\" grad_year")
     async def retireChannel(self, ctx, channel: discord.TextChannel = None, grad_year : int = -1):
         if not channel:     
             return await ctx.send(f"Channel '{channel}' not found in the server.")
         await channel_utils.retire_channel(channel, grad_year)
         await ctx.send(f"Channel '{channel.name}' retired to Archived category.")
 
-    @commands.command(pass_context=True, help="Deletes a channel from the server. Usage: deleteChannel \"channel_name\"")
+    @commands.command(pass_context=True, help="Deletes a channel from the server.\nUsage: deleteChannel \"channel_name\"")
     async def deleteChannel(self, ctx, channel: discord.TextChannel = None):
         if not channel:
             return await ctx.send(f"Channel '{channel}' not found in the server.")
@@ -494,7 +494,7 @@ class AdminMacros(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred during the transition process: {e}")
 
-    @commands.command(pass_context=True, aliases=['approve', 'approveleader', 'al'], help="Approves a member as a leader and assigns them the 'Leadership' role along with specified ministry roles. Usage: !approveLeader \"username or nickname\" ministry1 ministry2 ...")
+    @commands.command(pass_context=True, aliases=['approve', 'approveleader', 'al'], help="Approves a member as a leader and assigns them the 'Leadership' role along with specified ministry roles.\nUsage: approveLeader \"username or nickname\" ministry1 ministry2 ...")
     async def approveLeader(self, ctx, member: discord.Member, *ministries: str):
         """
         Approves a member as a leader by assigning them the 'Leadership' role.

@@ -30,7 +30,7 @@ class help(commands.Cog):
             if command.hidden:
                 continue
             embed.add_field(
-                name=f"@{command.name}",
+                name=f"▫️@{self.bot.user.mention} {command.name}",
                 value=command.help or "No description provided.",
                 inline=False
             )
