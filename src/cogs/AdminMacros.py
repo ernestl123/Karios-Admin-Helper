@@ -555,7 +555,7 @@ class AdminMacros(commands.Cog):
         if staff_channel:
             embed = discord.Embed(
                 title="New Leader Approved", 
-                description=f"{member.mention} has been approved as a leader for the following ministries: \n{'\n'.join(ministries)}.", 
+                description=f"{member.mention} has been approved as a leader for the following ministries: \n{', '.join(ministries)}.", 
                 footer = "Please react with any emoji to acknowledge this notification.", 
                 color=discord.Color.green()
             )
