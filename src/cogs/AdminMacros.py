@@ -509,7 +509,9 @@ class AdminMacros(commands.Cog):
         #Check for invalid ministries in the list
         err_str = ""
         for m in m_list:
-            if m.capitalize() not in ROLE_DATA:
+            if m != "VAM":
+                m = m.capitalize()
+            if m not in ROLE_DATA:
                 err_str += f"ERROR: Ministry '{m}' not found in the server. Please check the ministry name and try again.\n"
 
         if err_str:
