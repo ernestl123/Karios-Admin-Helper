@@ -515,7 +515,7 @@ class AdminMacros(commands.Cog):
                 err_str += f"ERROR: Ministry '{m}' not found in the server. Please check the ministry name and try again.\n"
 
         if err_str:
-            embed = discord.Embed(discord.Embed(description=err_str, color=discord.Color.red()))
+            embed = discord.Embed(title = "Error", description=err_str, color=discord.Color.red())
             embed.set_footer(text="Note: For Visual Arts and Media, please use 'VAM' as the ministry name.")
             await ctx.send(embed=embed)
             return
