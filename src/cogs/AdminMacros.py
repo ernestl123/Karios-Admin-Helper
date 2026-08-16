@@ -495,7 +495,7 @@ class AdminMacros(commands.Cog):
             await ctx.send(f"An error occurred during the transition process: {e}")
 
     @commands.command(pass_context=True, aliases=['approve', 'approveleader', 'al'])
-    async def approveLeader(self, ctx, member: discord.Member, *, ministries: str):
+    async def approveLeader(self, ctx, member: discord.Member, *ministries: str):
         """
         Approves a member as a leader by assigning them the 'Leadership' role.
 
@@ -504,7 +504,7 @@ class AdminMacros(commands.Cog):
             member (discord.Member): The member to approve as a leader.
             ministries (str): The ministries the member will lead.
         """
-        m_list = " ".join(ministries)
+        m_list = list(ministries)
 
         #Check for invalid ministries in the list
         err_str = ""
