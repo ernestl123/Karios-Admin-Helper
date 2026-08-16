@@ -30,10 +30,11 @@ class help(commands.Cog):
             if command.hidden:
                 continue
             embed.add_field(
-                name=f"▫️@{self.bot.user.mention} {command.name}",
+                name=f"▫️{command.name}",
                 value=command.help or "No description provided.",
                 inline=False
             )
+        embed.set_footer(text="Use the commands as shown with the following mention: @Kairos Admin Bot. Ex. @Kairos Admin Bot giveRole \"role_name\" \"member_name\"")
 
         await ctx.send(embed=embed)
 
