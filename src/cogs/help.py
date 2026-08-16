@@ -1,7 +1,9 @@
 import discord
 from discord.ext import commands
+import json
 
 with open("roles.json", "r") as file:
+    role_file = json.load(file)
     BOT_ADMIN_PERM = role_file["role_info"]["Admin_Access_Roles"]
 
 class help(commands.Cog):
@@ -13,7 +15,7 @@ class help(commands.Cog):
             allowed_roles = set(BOT_ADMIN_PERM)
             return any(role.name in allowed_roles for role in ctx.author.roles)
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, hidden=True)
     async def help(self, ctx):
         """
         Displays a list of available commands and their descriptions.
@@ -28,7 +30,7 @@ class help(commands.Cog):
             if command.hidden:
                 continue
             embed.add_field(
-                name=f"{ctx.prefix}{command.name}",
+                name=f"@{command.name}",
                 value=command.help or "No description provided.",
                 inline=False
             )

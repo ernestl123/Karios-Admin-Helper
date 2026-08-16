@@ -39,7 +39,7 @@ class AdminMacros(commands.Cog):
         allowed_roles = set(BOT_ADMIN_PERM)
         return any(role.name in allowed_roles for role in ctx.author.roles)
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, help="Assigns a role to a member in the server. Usage: giveRole \"role_name\" \"member_name\"")
     async def giveRole(self, ctx, role_name: str, member_name: str):
         """
         Assigns a role to a member in the server.
@@ -54,7 +54,7 @@ class AdminMacros(commands.Cog):
         except ValueError as e:
             await ctx.send(f"Error: {e}")
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, hidden=True)
     async def giveStaff(self, ctx, member: discord.Member):
         """
         Assigns the 'Staff' role to a member in the server.
@@ -68,7 +68,7 @@ class AdminMacros(commands.Cog):
         except ValueError as e:
             await ctx.send(f"Error: {e}")
     
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, help="Onboards a new staff member by assigning the 'Staff' role and any additional specified roles. Usage: onboardStaff @member role1 role2 ...")
     async def onboardStaff(self, ctx, member: discord.Member, *roles : str):
         """
         Onboards a new staff member by assigning the 'Staff' role and sending them a welcome message.
@@ -92,7 +92,7 @@ class AdminMacros(commands.Cog):
         
         await ctx.send(f"User {member.mention} has been onboarded with the '{STAFF_ROLE_NAME}' role and the following additional roles: {roles}.")
     
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, help="Offboards a staff member by removing the 'Staff' role and any additional specified roles. Usage: offboardStaff @member")
     async def offboardStaff(self, ctx, member: discord.Member, notify_staff_channel: bool = True):
         """
         Offboards a staff member by removing the 'Staff' role and sending them a farewell message.
@@ -125,7 +125,7 @@ class AdminMacros(commands.Cog):
 
         await ctx.send(f"User {member.mention} has been offboarded and the following roles have been removed: {', '.join(removed_roles)}.")
 
-    @commands.command(pass_context = True)
+    @commands.command(pass_context = True, help="Updates the leadership information based on a CSV file. Usage: updateLeadership")
     async def updateLeadership(self, ctx):
         """
         Imports member data from a CSV file attached to the command message.
@@ -169,7 +169,7 @@ class AdminMacros(commands.Cog):
             writer.writeheader()
             writer.writerows(reader)
 
-    @commands.command(pass_context = True)
+    @commands.command(pass_context = True, help="Assigns leadership roles to members based on a CSV file. Usage: assignLeadership")
     async def assignLeadership(self, ctx):
         """
         Assigns roles to members based on a CSV file attached to the command message.
@@ -249,21 +249,21 @@ class AdminMacros(commands.Cog):
         )
         return member
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, help="Transitions a channel to the archived category. Usage: transitionChannel \"channel_name\" grad_year")
     async def transitionChannel(self, ctx, channel_name : str, grad_year : int,):
         if await channel_utils.transition_channel(ctx, channel_name, grad_year):
             await ctx.send(f"Old channel '{channel_name}' retired to Archived category and new copy created.")
         else:
             await ctx.send(f"Failed to process channel '{channel_name}'. Please check the logs for more details.")
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, help="Retires a channel to the archived category. Usage: retireChannel \"channel_name\" grad_year")
     async def retireChannel(self, ctx, channel: discord.TextChannel = None, grad_year : int = -1):
         if not channel:     
             return await ctx.send(f"Channel '{channel}' not found in the server.")
         await channel_utils.retire_channel(channel, grad_year)
         await ctx.send(f"Channel '{channel.name}' retired to Archived category.")
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, help="Deletes a channel from the server. Usage: deleteChannel \"channel_name\"")
     async def deleteChannel(self, ctx, channel: discord.TextChannel = None):
         if not channel:
             return await ctx.send(f"Channel '{channel}' not found in the server.")
@@ -286,7 +286,7 @@ class AdminMacros(commands.Cog):
             await ctx.send(f"Channel deletion timed out.")
             return
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, hidden=True)
     async def getYears(self, ctx):
         """
         Displays the current graduation years for each class in the server.
@@ -300,7 +300,7 @@ class AdminMacros(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred while retrieving graduation years: {e}")
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, hidden=True)
     async def setYears(self, ctx, year_name: str, year_number: int):
         """
         Updates the graduation year for a specific class in the server.
@@ -328,7 +328,7 @@ class AdminMacros(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred while updating graduation years: {e}")  
     
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, hidden=True)
     async def transitionMinistry(self, ctx, ministry: str, grad_year : int):
         """
         Transitions a ministry role and its associated channel to a new graduation year.
@@ -368,7 +368,7 @@ class AdminMacros(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred during the transition process for ministry '{ministry}': {e}")
 
-    @commands.command(pass_context=True)
+    @commands.command(pass_context=True, hidden=True)
     async def transition(self, ctx, grad_year : int):
         """
         A mass script to transition all roles and channels for a given graduation year.
