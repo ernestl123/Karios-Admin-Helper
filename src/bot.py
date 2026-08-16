@@ -1,7 +1,7 @@
 import json
 import sqlite3
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import threading
 import requests
 
@@ -25,7 +25,8 @@ PCO_API_SECRET = config.get("pc_client_secret")
 bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=discord.Intents.all(), activity=discord.Game(name="Watching forms..."))
 bot.remove_command('help')
 cogs = [
-    "cogs.AdminMacros"
+    "cogs.AdminMacros",
+    "cogs.help"
 ]
 bot.VAM_TICKET_LOG_CHANNEL_ID = VAM_TICKET_LOG_CHANNEL_ID
     
