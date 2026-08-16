@@ -515,7 +515,9 @@ class AdminMacros(commands.Cog):
                 err_str += f"ERROR: Ministry '{m}' not found in the server. Please check the ministry name and try again.\n"
 
         if err_str:
-            await ctx.send(embed=discord.Embed(description=err_str, footer = "Note: For Visual Arts and Media, use 'VAM' instead.", color=discord.Color.red()))
+            embed = discord.Embed(discord.Embed(description=err_str, color=discord.Color.red()))
+            embed.set_footer(text="Note: For Visual Arts and Media, please use 'VAM' as the ministry name.")
+            await ctx.send(embed=embed)
             return
 
         #Confirmation prompt before proceeding
@@ -555,10 +557,10 @@ class AdminMacros(commands.Cog):
         if staff_channel:
             embed = discord.Embed(
                 title="New Leader Approved", 
-                description=f"{member.mention} has been approved as a leader for the following ministries: \n{', '.join(ministries)}.", 
-                footer = "Please react with any emoji to acknowledge this notification.", 
+                description=f"{member.mention} has been approved as a leader for the following ministries: \n{', '.join(ministries)}.",
                 color=discord.Color.green()
             )
+            embed.set_footer(text = "Please react with any emoji to acknowledge this notification.")
             await staff_channel.send(embed=embed)
         else:
             await ctx.send("ERROR: 'new-leaders-notifications' channel not found in the server. Please create the channel and try again.")
