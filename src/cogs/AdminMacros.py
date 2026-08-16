@@ -82,13 +82,13 @@ class AdminMacros(commands.Cog):
         try:
             await role_utils.give_role(ctx, member, STAFF_ROLE_NAME)
         except ValueError as e:
-            await ctx.send(f"Error assigning '{STAFF_ROLE_NAME}' role: {e}")
+            await ctx.send(f"Error assigning '{STAFF_ROLE_NAME}' role: {e}. Manual assignment required.")
             
         for role in roles:
             try:
                 await role_utils.give_role(ctx, member, role)
             except ValueError as e:
-                await ctx.send(f"Error assigning role '{role}': {e}")
+                await ctx.send(f"Error assigning role '{role}': {e}. Manual assignment required.")
         
         await ctx.send(f"User {member.mention} has been onboarded with the '{STAFF_ROLE_NAME}' role and the following additional roles: {roles}.")
     
@@ -144,6 +144,7 @@ class AdminMacros(commands.Cog):
         if not attachment.filename.endswith(".csv"):
             return await ctx.send("Please attach a valid CSV file.")
 
+        await ctx.send("Processing the CSV file. This may take a moment...")
         try:
             file_bytes = await attachment.read()
             csv_text = file_bytes.decode('utf-8')
@@ -161,58 +162,12 @@ class AdminMacros(commands.Cog):
                     await ctx.send(embed = discord.Embed(description=output))
         except Exception as e:
             await ctx.send(f"An error occurred while processing the CSV file: {e}")
-
-        # try:
-        #     # Download the attachment content as bytes
-        #     csv_data_bytes = await attachment.read()
-        #     csv_data_str = csv_data_bytes.decode('utf-8')  # Decode to string
-
-        #     # Use io.StringIO to treat the string as a file for the csv reader
-        #     csv_file = io.StringIO(csv_data_str)
-
-        #     # Process the CSV data
-        #     reader = csv.reader(csv_file)
-        #     next(reader)  # Skip the header row
-
-        #     rows_processed = 0
-        #     total_rows = len(list(reader))
-        #     csv_file.seek(0)
-        #     next(reader)  # Skip header again after seek
-
-        #     for row in reader:
-        #         name = row[1].strip() + " " + row[2].strip()
-        #         discord_handle = row[-1].strip().split("#")[0].replace('@', '')  # Remove discriminator and '@' if present
-        #         grad_year = row[15].strip()
-        #         school = row[13].strip()
-        #         college = row[14].strip()
-                
-        #         found = False
-        #         for year, keywords in YEARS.items():
-        #             if grad_year.lower() in keywords:
-        #                 grad_year = year
-        #                 found = True
-        #                 break
-        #         if not found:
-        #             print(f"Could not determine graduation year for entry: {name} with grad_year value: {grad_year}. Skipping.")
-        #             continue
-
-        #         guild = ctx.guild
-        #         discord_member = discord.utils.get(guild.members, name=discord_handle)
-        #         await self.bot.db.add_member(name, discord_handle, discord_member.id if discord_member else None, grad_year, school, college)
-        #         rows_processed += 1
-                
-        #         if discord_member:
-        #             await role_utils.assign_new_member(discord_member, name, school, college, grad_year, guild)
-        #             print(f"Stored member info in database for Discord handle: {discord_handle} with name : {name}, grad year: {grad_year}, school: {school}, college: {college}")
-                    
-        #         else:
-        #             print(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
-        #             await ctx.send(f"ERROR: Could not find Discord ID for handle: {discord_handle} for: {name}. Manual assignment may be required.")
-
-        #     await ctx.send(f"Successfully processed {rows_processed}/{total_rows} rows from the CSV file.")
-
-        # except Exception as e:
-        #     await ctx.send(f"An error occurred while processing: " + e)
+        
+        with open('current_leadership.csv', 'w', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['Name', 'Teams']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(reader)
 
     @commands.command(pass_context = True)
     async def assignLeadership(self, ctx):
@@ -539,6 +494,73 @@ class AdminMacros(commands.Cog):
         except Exception as e:
             await ctx.send(f"An error occurred during the transition process: {e}")
 
-    
+    @commands.command(pass_context=True, aliases=['approve', 'approveleader', 'al'])
+    async def approveLeader(self, ctx, member: discord.Member, *ministries: str):
+        """
+        Approves a member as a leader by assigning them the 'Leadership' role.
+
+        Args:
+            ctx: The context of the command.
+            member (discord.Member): The member to approve as a leader.
+            ministries (str): The ministries the member will lead.
+        """
+        m_list = " ".join(ministries)
+
+        #Check for invalid ministries in the list
+        err_str = ""
+        for m in m_list:
+            if m == "VAM":
+                m = "Visual Arts and Media"
+            if m.capitalize() not in ROLE_DATA:
+                err_str += f"ERROR: Ministry '{m}' not found in the server. Please check the ministry name and try again.\n"
+
+        if err_str:
+            await ctx.send(embed=discord.Embed(description=err_str, footer = "Note: For Visual Arts and Media, use 'VAM' instead.", color=discord.Color.red()))
+            return
+
+        #Confirmation prompt before proceeding
+        await ctx.send(f"Confirmation: Are you sure you want to approve {member.mention} as a leader for the following ministries: {m_list}? Type 'yes' to confirm or 'no' to cancel.")
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['yes', 'no']
+
+        try:
+            event = await self.bot.wait_for('message', check=check, timeout=30.0)
+            if event.content.lower() == 'no':
+                await ctx.send(f"Approval process for {member.mention} has been cancelled.")
+                return
+        except asyncio.TimeoutError:
+            await ctx.send(f"Approval process for {member.mention} has timed out. Please try again.")
+            return
+        
+        #Passed all checks, proceed to assignment
+        leadership_role = discord.utils.get(ctx.guild.roles, name="Leadership")
+        if leadership_role:
+            await member.add_roles(leadership_role)
+            await ctx.send(f"Successfully approved {member.mention} as a leader and assigned the 'Leadership' role.")
+        else:
+            await ctx.send("ERROR: 'Leadership' role not found in the server. Please create the role and try again.")
+
+        for ministry in ministries:
+            #Assign ministry role
+            role_obj = discord.utils.get(ctx.guild.roles, name=ministry)
+            if role_obj:
+                await member.add_roles(role_obj)
+                await ctx.send(f"Successfully assigned the '{ministry}' role to {member.mention}.")
+            else:
+                await ctx.send(f"ERROR: Role '{ministry}' not found in the server. Please create the role and try again.")
+
+        #Notify college staff channel
+        staff_channel = discord.utils.get(ctx.guild.text_channels, name="new-leaders-notifications")
+        if staff_channel:
+            embed = discord.Embed(
+                title="New Leader Approved", 
+                description=f"{member.mention} has been approved as a leader for the following ministries: \n{'\n'.join(ministries)}.", 
+                footer = "Please react with any emoji to acknowledge this notification.", 
+                color=discord.Color.green()
+            )
+            await staff_channel.send(embed=embed)
+        else:
+            await ctx.send("ERROR: 'new-leaders-notifications' channel not found in the server. Please create the channel and try again.")
 async def setup(bot):
     await bot.add_cog(AdminMacros(bot))
