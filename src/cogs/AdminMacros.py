@@ -504,14 +504,12 @@ class AdminMacros(commands.Cog):
             member (discord.Member): The member to approve as a leader.
             ministries (str): The ministries the member will lead.
         """
-        m_list = list(ministries)
+        m_list = [m.capitalize() if m.lower() != "vam" else "VAM" for m in list(ministries)]
 
         #Check for invalid ministries in the list
         err_str = ""
         for m in m_list:
-            if m != "VAM":
-                m = m.capitalize()
-            if m not in ROLE_DATA:
+            if m.upper() != "VAM" and m.capitalize() not in ROLE_DATA:
                 err_str += f"ERROR: Ministry '{m}' not found in the server. Please check the ministry name and try again.\n"
 
         if err_str:
@@ -521,7 +519,7 @@ class AdminMacros(commands.Cog):
             return
 
         #Confirmation prompt before proceeding
-        await ctx.send(f"Confirmation: Are you sure you want to approve {member.mention} as a leader for the following ministries: {m_list}? Type 'yes' to confirm or 'no' to cancel.")
+        await ctx.send(f"Confirmation: Are you sure you want to approve {member.mention} as a leader for the following ministries:\n{m_list}\nType 'yes' to confirm or 'no' to cancel.")
 
         def check(m):
             return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['yes', 'no']
@@ -549,12 +547,9 @@ class AdminMacros(commands.Cog):
             await ctx.send("ERROR: 'Leadership' role not found in the server. Please create the role and try again.")
 
         mention_str = ""
-        for ministry in ministries:
-            if ministry != "VAM":
-                ministry = ministry.capitalize()
-
+        for ministry in m_list:
             #Assign ministry role
-            role_obj = discord.utils.get(ctx.guild.roles, name=ministry)
+            role_obj = discord.utils.get(ctx.guild.roles, name=ministry + " Staff")
             if role_obj:
                 await member.add_roles(role_obj)
                 await ctx.send(f"Successfully assigned the '{ministry}' role to {member.mention}.")
@@ -567,14 +562,15 @@ class AdminMacros(commands.Cog):
         if staff_channel:
             embed = discord.Embed(
                 title="New Leader Approved", 
-                description=f"{member.mention} has been approved as a leader for the following ministries: \n{', '.join(ministries)}.",
+                description=f"{member.mention} has been approved as a leader for the following ministries: \n{', '.join(m_list)}.",
                 color=discord.Color.green()
             )
             embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
-            embed.set_footer(text = "Please react with any emoji to acknowledge this notification.")
+            embed.set_footer(text = "Staff in charge of these teams please react with any emoji to acknowledge this notification.")
             await staff_channel.send(f"{mention_str}", embed=embed)
             #await staff_channel.send(embed=embed)
         else:
             await ctx.send("ERROR: 'new-leaders-notifications' channel not found in the server. Please create the channel and try again.")
+
 async def setup(bot):
     await bot.add_cog(AdminMacros(bot))
