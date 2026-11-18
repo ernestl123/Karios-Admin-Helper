@@ -290,25 +290,3 @@ Displays an organized Discord embed detailing all public bot commands and their 
   ```
 
 ---
-
-## Webhook Server
-
-The bot runs a background Flask server on the port configured in `form_port` (default `5000`).
-
-- **Endpoint**: `POST /webhook`
-- **Header**: `Webhook-Secret: <form_webhook_secret>`
-- **Payload**:
-  ```json
-  {
-    "title": "Rides Form",
-    "data": {
-      "Timestamp": "2026-11-18 10:00:00",
-      "Name": "Student Name",
-      "Notes": "Needs ride from campus"
-    }
-  }
-  ```
-- **Embed Colors**:
-  - `"Late Rides Form"`: Red
-  - `"Rides Form"`: Blue
-  - Forms with `"driver"` in title: Green
