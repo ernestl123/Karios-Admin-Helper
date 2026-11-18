@@ -26,6 +26,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "prefix": os.getenv("BOT_PREFIX", "!"),
     "form_log_channel_id": int(os.getenv("FORM_LOG_CHANNEL_ID", "0")),
     "VAM_ticket_log_channel_id": int(os.getenv("VAM_TICKET_LOG_CHANNEL_ID", "0")),
+    "staff_availability_channel_id": int(os.getenv("STAFF_AVAILABILITY_CHANNEL_ID", "0")),
     "form_port": int(os.getenv("FORM_PORT", "5000")),
     "pc_client_id": os.getenv("PC_CLIENT_ID", ""),
     "pc_client_secret": os.getenv("PC_CLIENT_SECRET", ""),
@@ -58,6 +59,7 @@ TOKEN = config.get("token")
 PREFIX = config.get("prefix", "!")
 FORM_LOG_CHANNEL_ID = config.get("form_log_channel_id")
 VAM_TICKET_LOG_CHANNEL_ID = config.get("VAM_ticket_log_channel_id")
+STAFF_AVAILABILITY_CHANNEL_ID = config.get("staff_availability_channel_id")
 FORM_PORT = config.get("form_port", 5000)
 PCO_API_TOKEN = config.get("pc_client_id")
 PCO_API_SECRET = config.get("pc_client_secret")
@@ -73,14 +75,17 @@ def create_bot(custom_config: Optional[Dict[str, Any]] = None) -> commands.Bot:
         activity=discord.Game(name="Watching forms...")
     )
     bot_instance.remove_command('help')
+    bot_instance.config = cfg
     bot_instance.VAM_TICKET_LOG_CHANNEL_ID = cfg.get("VAM_ticket_log_channel_id")
+    bot_instance.STAFF_AVAILABILITY_CHANNEL_ID = cfg.get("staff_availability_channel_id")
     return bot_instance
 
 bot = create_bot(config)
 
 cogs = [
     "cogs.AdminMacros",
-    "cogs.help"
+    "cogs.help",
+    "cogs.staff_poll"
 ]
 
 @bot.event
