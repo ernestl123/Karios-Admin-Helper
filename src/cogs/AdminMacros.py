@@ -1,18 +1,35 @@
+import asyncio
+import csv
 import io
+import json
+import os
+from pathlib import Path
+from typing import Optional
+
 import discord
 from discord.ext import commands
-from discord.ext.commands import has_role
-import asyncio
-import os
-import random
-import json
-import csv
 
-from flask import ctx
-
-import utils.role_utils as role_utils
 import utils.channel_utils as channel_utils
 import utils.csv_utils as csv_utils
+import utils.role_utils as role_utils
+import utils.year_utils as year_utils
+
+def _get_roles_path() -> Path:
+    root = year_utils.get_project_root()
+    p = root / "roles.json"
+    if p.exists():
+        return p
+    return Path("roles.json")
+
+def load_role_file() -> dict:
+    with open(_get_roles_path(), "r", encoding="utf-8") as f:
+        return json.load(f)
+
+role_file = load_role_file()
+ROLE_DATA = role_file.get("roles", [])
+BOT_ADMIN_PERM = role_file.get("role_info", {}).get("Admin_Access_Roles", [])
+STAFF_ROLE_NAME = role_file.get("role_info", {}).get("Staff_Role_Name", "Staff")
+VAM_ROLE_NAME = role_file.get("role_info", {}).get("Visual_Arts_and_Media_Role_Name", "VAM")
 
 YEARS = {
     "Class of '26": ["26", "2026", "senior", "seniors", "fourth", "4th", "4th year", '4'],
@@ -20,24 +37,32 @@ YEARS = {
     "Class of '28": ["28", "2028", "sophomore", "sophomores", "second", "2nd", "2nd year", '2'],
     "Class of '29": ["29", "2029", "freshman", "freshmen", "first", "1st", "1st year", '1']
 }
-with open("roles.json", "r") as file:
-    role_file = json.load(file)
-    ROLE_DATA = role_file["roles"]
-    BOT_ADMIN_PERM = role_file["role_info"]["Admin_Access_Roles"]
-    STAFF_ROLE_NAME = role_file["role_info"]["Staff_Role_Name"]
-    VAM_ROLE_NAME = role_file["role_info"]["Visual_Arts_and_Media_Role_Name"]
 
 class AdminMacros(commands.Cog):
     def __init__(self, bot):
-        self.bot = bot 
+        self.bot = bot
         self.__cog_check__ = self.cog_check
+        self.roles_data = ROLE_DATA
+        for cmd in self.__cog_commands__:
+            cmd.cog = self
 
-        with open("roles.json", "r") as file:
-            self.roles_data = json.load(file)["roles"]
-    
     async def cog_check(self, ctx):
         allowed_roles = set(BOT_ADMIN_PERM)
-        return any(role.name in allowed_roles for role in ctx.author.roles)
+        author_roles = getattr(ctx.author, "roles", [])
+        return any(role.name in allowed_roles for role in author_roles)
+
+    async def _prompt_yes_no(self, ctx, prompt_text: str, timeout: float = 30.0) -> Optional[bool]:
+        """Prompts the user with a yes/no question and returns True for yes, False for no, None on timeout."""
+        await ctx.send(prompt_text)
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['yes', 'no']
+
+        try:
+            event = await self.bot.wait_for('message', check=check, timeout=timeout)
+            return event.content.lower() == 'yes'
+        except asyncio.TimeoutError:
+            return None
 
     @commands.command(pass_context=True, help="Assigns a role to a member in the server.\nUsage: giveRole \"role_name\" \"member_name\"")
     async def giveRole(self, ctx, role_name: str, member_name: str):
@@ -51,6 +76,7 @@ class AdminMacros(commands.Cog):
         """
         try:
             await role_utils.give_role(ctx, role_name, member_name)
+            await ctx.send(f"Role '{role_name}' successfully assigned to '{member_name}'.")
         except ValueError as e:
             await ctx.send(f"Error: {e}")
 
@@ -65,11 +91,12 @@ class AdminMacros(commands.Cog):
         """
         try:
             await role_utils.give_role(ctx, member, STAFF_ROLE_NAME)
+            await ctx.send(f"Successfully assigned the '{STAFF_ROLE_NAME}' role to {member.mention}.")
         except ValueError as e:
             await ctx.send(f"Error: {e}")
-    
+
     @commands.command(pass_context=True, help="Onboards a new staff member by assigning the 'Staff' role and any additional specified roles.\nUsage: onboardStaff @member role1 role2 ...")
-    async def onboardStaff(self, ctx, member: discord.Member, *roles : str):
+    async def onboardStaff(self, ctx, member: discord.Member, *roles: str):
         """
         Onboards a new staff member by assigning the 'Staff' role and sending them a welcome message.
 
@@ -78,20 +105,33 @@ class AdminMacros(commands.Cog):
             member (discord.Member): The member to onboard.
             *roles (str): The roles to assign to the member separated by spaces.
         """
-        roles = " ".join(roles)
         try:
             await role_utils.give_role(ctx, member, STAFF_ROLE_NAME)
         except ValueError as e:
             await ctx.send(f"Error assigning '{STAFF_ROLE_NAME}' role: {e}. Manual assignment required.")
-            
+
+        all_assigned = []
         for role in roles:
+            norm_role = "VAM" if role.lower() == "vam" else role
+            # Assign the ministry role itself
             try:
-                await role_utils.give_role(ctx, member, role)
+                await role_utils.give_role(ctx, member, norm_role)
+                all_assigned.append(norm_role)
             except ValueError as e:
-                await ctx.send(f"Error assigning role '{role}': {e}. Manual assignment required.")
-        
-        await ctx.send(f"User {member.mention} has been onboarded with the '{STAFF_ROLE_NAME}' role and the following additional roles: {roles}.")
-    
+                await ctx.send(f"Error assigning role '{norm_role}': {e}. Manual assignment required.")
+
+            # Assign the additional '{Ministry name} Staff' role
+            staff_role_name = norm_role if norm_role.endswith(" Staff") else f"{norm_role} Staff"
+            if staff_role_name != norm_role:
+                try:
+                    await role_utils.give_role(ctx, member, staff_role_name)
+                    all_assigned.append(staff_role_name)
+                except ValueError as e:
+                    await ctx.send(f"Error assigning role '{staff_role_name}': {e}. Manual assignment required.")
+
+        assigned_str = ", ".join(all_assigned) if all_assigned else "none"
+        await ctx.send(f"User {member.mention} has been onboarded with the '{STAFF_ROLE_NAME}' role and the following additional roles: {assigned_str}.")
+
     @commands.command(pass_context=True, help="Offboards a staff member by removing the 'Staff' role and any additional specified roles.\nUsage: offboardStaff @member")
     async def offboardStaff(self, ctx, member: discord.Member, notify_staff_channel: bool = True):
         """
@@ -100,22 +140,25 @@ class AdminMacros(commands.Cog):
         Args:
             ctx: The context of the command.
             member (discord.Member): The member to offboard.
+            notify_staff_channel (bool): Whether to notify the staff channel.
         """
         try:
             await role_utils.remove_role(ctx, member, STAFF_ROLE_NAME)
             await ctx.send(f"User {member.mention} has been offboarded and the '{STAFF_ROLE_NAME}' role has been removed.")
         except ValueError as e:
             await ctx.send(f"Error removing '{STAFF_ROLE_NAME}' role: {e}")
-        
+
         removed_roles = [STAFF_ROLE_NAME]
-        for role in member.roles:
-            if role.name in self.roles_data:
+        for role in list(member.roles):
+            is_ministry = role.name in self.roles_data
+            is_ministry_staff = role.name.endswith(" Staff") and role.name[:-6] in self.roles_data
+            if is_ministry or is_ministry_staff:
                 try:
                     await role_utils.remove_role(ctx, member, role.name)
+                    removed_roles.append(role.name)
                 except ValueError as e:
                     await ctx.send(f"Error removing role '{role.name}': {e}")
-                removed_roles.append(role.name)
-        
+
         if notify_staff_channel:
             staff_channel = discord.utils.get(ctx.guild.text_channels, name="staff")
             if staff_channel:
@@ -125,11 +168,11 @@ class AdminMacros(commands.Cog):
 
         await ctx.send(f"User {member.mention} has been offboarded and the following roles have been removed: {', '.join(removed_roles)}.")
 
-    @commands.command(pass_context = True, help="Updates the leadership information based on a CSV file.\nUsage: updateLeadership")
+    @commands.command(pass_context=True, help="Updates the leadership information based on a CSV file.\nUsage: updateLeadership")
     async def updateLeadership(self, ctx):
         """
         Imports member data from a CSV file attached to the command message.
-        The CSV file should have the following columns: name, discord_handle, grad_year, school, college.
+        The CSV file should have the following columns: Name, Teams.
 
         Args:
             ctx: The context of the command.
@@ -137,10 +180,7 @@ class AdminMacros(commands.Cog):
         if not ctx.message.attachments:
             return await ctx.send("Please attach a CSV file to the message.")
 
-        # Get the attachment (we assume only one for this example)
         attachment = ctx.message.attachments[0]
-
-        # Validate the file type
         if not attachment.filename.endswith(".csv"):
             return await ctx.send("Please attach a valid CSV file.")
 
@@ -148,28 +188,31 @@ class AdminMacros(commands.Cog):
         try:
             file_bytes = await attachment.read()
             csv_text = file_bytes.decode('utf-8')
-            reader = csv.DictReader(io.StringIO(csv_text))
-            error_out, success_out = await csv_utils.mass_migrate_csv(reader, ctx.guild)
-            
+            rows = list(csv.DictReader(io.StringIO(csv_text)))
+            error_out, success_out = await csv_utils.mass_migrate_csv(rows, ctx.guild)
+
             for output in [error_out, success_out]:
+                if not output:
+                    continue
                 if len(output) > 4000:
-                    # If the output is too long, send it as a file
                     with open("migration_output.txt", "w", encoding="utf-8") as f:
                         f.write(output)
                     await ctx.send("The output was too long, so it has been sent as a file.", file=discord.File("migration_output.txt"))
-                    os.remove("migration_output.txt")  # Clean up the temporary file
+                    if os.path.exists("migration_output.txt"):
+                        os.remove("migration_output.txt")
                 else:
-                    await ctx.send(embed = discord.Embed(description=output))
+                    await ctx.send(embed=discord.Embed(description=output))
+
+            with open('current_leadership.csv', 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['Name', 'Teams']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+
         except Exception as e:
             await ctx.send(f"An error occurred while processing the CSV file: {e}")
-        
-        with open('current_leadership.csv', 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['Name', 'Teams']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(reader)
 
-    @commands.command(pass_context = True, help="Assigns leadership roles to members based on a CSV file.\nUsage: assignLeadership")
+    @commands.command(pass_context=True, help="Assigns leadership roles to members based on a CSV file.\nUsage: assignLeadership")
     async def assignLeadership(self, ctx):
         """
         Assigns roles to members based on a CSV file attached to the command message.
@@ -181,120 +224,115 @@ class AdminMacros(commands.Cog):
         if not ctx.message.attachments:
             return await ctx.send("Please attach a CSV file to the message.")
 
-        # Get the attachment (we assume only one for this example)
         attachment = ctx.message.attachments[0]
-
-        # Validate the file type
         if not attachment.filename.endswith(".csv"):
             return await ctx.send("Please attach a valid CSV file.")
 
         try:
-            # Download the attachment content as bytes
             csv_data_bytes = await attachment.read()
-            csv_data_str = csv_data_bytes.decode('utf-8')  # Decode to string
-
-            # Use io.StringIO to treat the string as a file for the csv reader
+            csv_data_str = csv_data_bytes.decode('utf-8')
             csv_file = io.StringIO(csv_data_str)
+            raw_reader = list(csv.reader(csv_file))
 
-            # Process the CSV data
-            reader = csv.reader(csv_file)
-            next(reader)  # Skip the header row
+            if not raw_reader:
+                return await ctx.send("The attached CSV file is empty.")
 
+            # Skip header row
+            rows = raw_reader[1:]
+            total_rows = len(rows)
             rows_processed = 0
-            total_rows = len(list(reader))
-
-            role_names = []
-            leadership_role = discord.utils.get(ctx.guild.roles, name="Leadership")
-
             error_str = ""
-            for row in reader:
-                print(f"Row: {row}")
+
+            for row in rows:
+                if not row or len(row) < 2:
+                    continue
                 role_name = row[0].strip()
                 member_name = row[1].strip()
 
                 role_obj = self.get_role_by_name(ctx, role_name)
                 if role_obj:
                     member = self.get_user_case_insensitive(ctx, member_name)
-
                     if member:
                         await member.add_roles(role_obj)
                         print(f"Assigned role **{role_name}** to **{member_name}**.")
                         rows_processed += 1
                     else:
-                        error_str += f"ERROR: Member '{member_name}' not found when for role assignment: {role_name}\n"
+                        error_str += f"ERROR: Member '{member_name}' not found for role assignment: {role_name}\n"
                 else:
                     error_str += f"ERROR: Role '{role_name}' not found when assigning to '{member_name}'\n"
 
             if error_str:
-                await ctx.send(embed = discord.Embed(description=error_str, color=discord.Color.red()))
+                await ctx.send(embed=discord.Embed(description=error_str, color=discord.Color.red()))
 
             await ctx.send(f"Successfully processed {rows_processed}/{total_rows} rows from the CSV file.")
 
         except Exception as e:
-            await ctx.send(f"An error occurred while processing the CSV file: {e.with_traceback()}")
+            await ctx.send(f"An error occurred while processing the CSV file: {e}")
 
-    def get_role_by_name(self, ctx, role_name : str):
+    def get_role_by_name(self, ctx, role_name: str):
         """Helper function to get a role by its name."""
         return discord.utils.get(ctx.guild.roles, name=role_name)
-        
+
     def get_user_case_insensitive(self, ctx, search_name: str):
         """
-        Retrieves a user by their name (or display name) case-insensitively.
+        Retrieves a user by their name, display name, or nickname case-insensitively.
+        Returns None if no matching user is found.
         """
-        guild = ctx.guild  # Get the Guild object from the context
-        search_name_lower = search_name.lower() # Convert search name to lowercase for comparison
-
-        member = next(
-            (m for m in guild.members if m.name.lower() == search_name_lower or m.display_name.lower() == search_name_lower),
-        )
-        return member
+        guild = ctx.guild
+        search_lower = search_name.strip().lower()
+        for m in guild.members:
+            if m.name and m.name.lower() == search_lower:
+                return m
+            if m.display_name and m.display_name.lower() == search_lower:
+                return m
+            if m.nick and m.nick.lower() == search_lower:
+                return m
+        return None
 
     @commands.command(pass_context=True, help="Transitions a channel to the archived category.\nUsage: transitionChannel \"channel_name\" grad_year")
-    async def transitionChannel(self, ctx, channel_name : str, grad_year : int,):
-        if await channel_utils.transition_channel(ctx, channel_name, grad_year):
+    async def transitionChannel(self, ctx, channel_name: str, grad_year: int):
+        try:
+            await channel_utils.transition_channel(ctx, channel_name, grad_year)
             await ctx.send(f"Old channel '{channel_name}' retired to Archived category and new copy created.")
-        else:
-            await ctx.send(f"Failed to process channel '{channel_name}'. Please check the logs for more details.")
+        except Exception as e:
+            await ctx.send(f"Failed to process channel '{channel_name}': {e}")
 
     @commands.command(pass_context=True, help="Retires a channel to the archived category.\nUsage: retireChannel \"channel_name\" grad_year")
-    async def retireChannel(self, ctx, channel: discord.TextChannel = None, grad_year : int = -1):
-        if not channel:     
+    async def retireChannel(self, ctx, channel: discord.TextChannel = None, grad_year: int = -1):
+        if not channel:
             return await ctx.send(f"Channel '{channel}' not found in the server.")
-        await channel_utils.retire_channel(channel, grad_year)
-        await ctx.send(f"Channel '{channel.name}' retired to Archived category.")
+        try:
+            await channel_utils.retire_channel(channel, grad_year)
+            await ctx.send(f"Channel '{channel.name}' retired to Archived category.")
+        except Exception as e:
+            await ctx.send(f"Failed to retire channel '{channel.name}': {e}")
 
     @commands.command(pass_context=True, help="Deletes a channel from the server.\nUsage: deleteChannel \"channel_name\"")
     async def deleteChannel(self, ctx, channel: discord.TextChannel = None):
         if not channel:
             return await ctx.send(f"Channel '{channel}' not found in the server.")
-        #Ask for confirmation before deleting the channel
-        await ctx.send(f"Are you sure you want to delete the channel '{channel.name}'? Type 'yes' to confirm or 'no' to cancel.")
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['yes', 'no']
-        
-        try:
-            event = await self.bot.wait_for('message', check=check, timeout = 30.0)
-            if event.content.lower() == 'no':
-                await ctx.send(f"Channel deletion cancelled.")
-                return
-            await channel_utils.delete_channel(channel)
-            await ctx.send(f"Channel '{channel.name}' deleted.")
-        except discord.Forbidden:
-            await ctx.send(f"Bot does not have permission to delete channel '{channel.name}'.")
-            return
-        except asyncio.TimeoutError:
-            await ctx.send(f"Channel deletion timed out.")
-            return
+
+        prompt = f"Are you sure you want to delete the channel '{channel.name}'? Type 'yes' to confirm or 'no' to cancel."
+        confirmed = await self._prompt_yes_no(ctx, prompt, timeout=30.0)
+
+        if confirmed is None:
+            await ctx.send("Channel deletion timed out.")
+        elif not confirmed:
+            await ctx.send("Channel deletion cancelled.")
+        else:
+            try:
+                await channel_utils.delete_channel(channel)
+                await ctx.send(f"Channel '{channel.name}' deleted.")
+            except discord.Forbidden:
+                await ctx.send(f"Bot does not have permission to delete channel '{channel.name}'.")
+            except Exception as e:
+                await ctx.send(f"Failed to delete channel '{channel.name}': {e}")
 
     @commands.command(pass_context=True, hidden=True)
     async def getYears(self, ctx):
-        """
-        Displays the current graduation years for each class in the server.
-        """
+        """Displays the current graduation years for each class in the server."""
         try:
-            with open('current_years.json', 'r') as file:
-                current_years = json.load(file)
-            
+            current_years = year_utils.load_current_years()
             years_info = "\n".join([f"**{class_name}**: {year}" for class_name, year in current_years.items()])
             await ctx.send(embed=discord.Embed(title="Current Graduation Years", description=years_info, color=discord.Color.blue()))
         except Exception as e:
@@ -307,29 +345,20 @@ class AdminMacros(commands.Cog):
 
         Args:
             ctx: The context of the command.
-            year_name (str): The name of the class (e.g., "Freshman", "Sophomore", "Junior", "Senior").
+            year_name (str): The name of the class (Freshman, Sophomore, Junior, Senior).
             year_number (int): The new graduation year to set for the specified class.
         """
         try:
-            with open('current_years.json', 'r') as file:
-                current_years = json.load(file)
-
-            year_name = year_name.capitalize()  # Ensure the year name is capitalized to match the keys in the JSON file
-            if year_name not in current_years:
-                await ctx.send(f"Invalid class name '{year_name}'. Valid options are: {', '.join(current_years.keys())}.")
-                return
-            
-            current_years[year_name] = year_number
-            
-            with open('current_years.json', 'w') as file:
-                json.dump(current_years, file, indent=4)
-            
-            await ctx.send(f"Updated graduation year for **{year_name}** to **{year_number}**.")
+            normalized_name = year_name.capitalize()
+            current_years = year_utils.update_class_year(normalized_name, year_number)
+            await ctx.send(f"Updated graduation year for **{normalized_name}** to **{year_number}**.")
+        except ValueError as ve:
+            await ctx.send(str(ve))
         except Exception as e:
-            await ctx.send(f"An error occurred while updating graduation years: {e}")  
-    
+            await ctx.send(f"An error occurred while updating graduation years: {e}")
+
     @commands.command(pass_context=True, hidden=True)
-    async def transitionMinistry(self, ctx, ministry: str, grad_year : int):
+    async def transitionMinistry(self, ctx, ministry: str, grad_year: int):
         """
         Transitions a ministry role and its associated channel to a new graduation year.
 
@@ -339,115 +368,104 @@ class AdminMacros(commands.Cog):
             grad_year (int): The last two digits of the graduation year to transition to.
         """
         try:
-            # Get the role object for the specified ministry
             role_obj = self.get_role_by_name(ctx, ministry)
             if not role_obj:
                 await ctx.send(f"Role '{ministry}' not found in the server.")
                 return
-            
-            # Transition the role
+
             replaced_role = await role_utils.transition_role(role_obj, grad_year)
-            
-            # Move the associated channel to the archive category
-            if ministry.lower == "VAM":
+
+            if ministry.upper() == "VAM":
                 channel_name = "visual-arts-and-media"
+            elif ministry.lower() == "prayer":
+                channel_name = "prayer-team"
             else:
-                channel_name = ministry.replace(" ", "-").lower()  # Replace spaces with hyphens for channel name
+                channel_name = ministry.replace(" ", "-").lower()
+
             old_channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+            if not old_channel:
+                old_channel = discord.utils.get(ctx.guild.channels, name=f"{channel_name}-team")
             if not old_channel:
                 await ctx.send(f"Channel '{channel_name}' not found in the server. Cannot archive.")
                 return
-            
+
             overwrites = {
                 ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
                 replaced_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
             }
             await channel_utils.transition_channel(old_channel, grad_year, overwrites)
-            
+
             await ctx.send(f"Successfully transitioned ministry '{ministry}' and its associated channel to graduation year '{grad_year}'.")
         except Exception as e:
             await ctx.send(f"An error occurred during the transition process for ministry '{ministry}': {e}")
 
     @commands.command(pass_context=True, hidden=True)
-    async def transition(self, ctx, grad_year : int):
+    async def transition(self, ctx, grad_year: int):
         """
         A mass script to transition all roles and channels for a given graduation year.
-        
+
         Args:
             ctx: The context of the command.
             grad_year (int): The last two digits of the graduation year to transition.
-        
-        Returns:
-            None    
         """
         if len(str(abs(grad_year))) != 2:
             await ctx.send(f"Invalid graduation year '{grad_year}'. Please provide the last two digits of the year (e.g., 26 for 2026).")
             return
-        
+
         channel_count = ctx.guild.text_channels
         if len(channel_count) > 40:
             await ctx.send(f"Warning: The server has {len(channel_count)} channels. Please delete some channels before running the transition to avoid hitting Discord's channel limit.")
             return
+
         try:
-            #Update all the leadership roles
-            
             log_output = "---TRANSITIONING ROLES---\n"
 
-            roles = ROLE_DATA
-            for role_name in roles:
-                if role_name == "Visual Arts and Media":
-                    role_name = "VAM"
-                role_obj = self.get_role_by_name(ctx, role_name)
+            for role_name in ROLE_DATA:
+                lookup_name = "VAM" if role_name == "Visual Arts and Media" else role_name
+                role_obj = self.get_role_by_name(ctx, lookup_name)
 
                 try:
                     if role_obj:
-                        #rename role
                         replaced_role = await role_utils.transition_role(role_obj, grad_year)
                     else:
-                        log_output += f"ERROR: Role not found: {role_name}\n"
+                        log_output += f"ERROR: Role not found: {lookup_name}\n"
+                        continue
 
-                    #move channel to archive category
-                    if role_name == "Prayer":
+                    if lookup_name == "Prayer":
                         channel_name = "prayer-team"
                     else:
-                        channel_name = role_name.replace(" ", "-").lower()  # Replace spaces with hyphens for channel name
+                        channel_name = lookup_name.replace(" ", "-").lower()
 
                     old_channel = discord.utils.get(ctx.guild.channels, name=channel_name)
                     if not old_channel:
                         log_output += f"ERROR: Channel '{channel_name}' not found in the server. Cannot archive.\n"
                         continue
-                    
+
                     overwrites = {
                         ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
                         replaced_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
                     }
                     await channel_utils.transition_channel(old_channel, grad_year, overwrites)
-                    log_output += f"SUCCESS: Moved channel '{role_name}' to archive category\n"
+                    log_output += f"SUCCESS: Moved channel '{lookup_name}' to archive category\n"
 
                 except discord.Forbidden:
-                    log_output += f"ERROR: Failed to edit role '{role_name}'. Check permissions.\n"
+                    log_output += f"ERROR: Failed to edit role '{lookup_name}'. Check permissions.\n"
                     continue
-            
-            log_output += "\n---DELETING SPECIAL EVENTS & SOCIAL CHANNELS---\n"
-            #Archive all channels in the special events category
-            special_events_category = discord.utils.get(ctx.guild.categories, name="Special Events & Socials")
-            for channel in special_events_category.channels:
-                await channel_utils.delete_channel(channel)
-                log_output += f"SUCCESS: Deleted channel '{channel.name}' from the server.\n"
 
-            # Update the current years in the JSON file
-            with open('current_years.json', 'r') as file:
-                current_years = json.load(file)
-            
-            # Update the current years in the JSON file
-            current_years["Freshman"] = int("20" + str(grad_year + 4))
-            current_years["Sophomore"] = int("20" + str(grad_year + 3))
-            current_years["Junior"] = int("20" + str(grad_year + 2))
-            current_years["Senior"] = int("20" + str(grad_year + 1))
+            log_output += "\n---DELETING SPECIAL EVENTS & SOCIAL CHANNELS---\n"
+            special_events_category = discord.utils.get(ctx.guild.categories, name="Special Events & Socials")
+            if special_events_category:
+                for channel in list(special_events_category.channels):
+                    await channel_utils.delete_channel(channel)
+                    log_output += f"SUCCESS: Deleted channel '{channel.name}' from the server.\n"
+            else:
+                log_output += "INFO: 'Special Events & Socials' category not found. Skipping channel deletion.\n"
+
+            # Update current years
+            current_years = year_utils.calculate_transition_years(grad_year)
+            year_utils.save_current_years(current_years)
 
             log_output += "\n---ARCHIVING GRADUATING CLASS CHANNEL---\n"
-
-            #Archive the grad_year chat
             grad_year_channel = discord.utils.get(ctx.guild.channels, name=f"co-20{grad_year}")
             if grad_year_channel:
                 await channel_utils.retire_channel(grad_year_channel, grad_year)
@@ -455,28 +473,27 @@ class AdminMacros(commands.Cog):
 
             log_output += "\n---CREATING NEW CLASS ROLES AND CHANNELS---\n"
             for year_int in current_years.values():
-                #Create a Class of '{year_int}' role if it doesn't exist
-                class_role_name = f"Class of '{str(year_int)[-2:]}"
+                class_role_name = year_utils.format_class_role_name(year_int)
                 class_role = discord.utils.get(ctx.guild.roles, name=class_role_name)
                 if not class_role:
-                    class_role = await ctx.guild.create_role(name=class_role_name, color=discord.Color.default(), reason=f"Creating new class role for graduation year '{year_int}")
+                    class_role = await ctx.guild.create_role(
+                        name=class_role_name,
+                        color=discord.Color.default(),
+                        reason=f"Creating new class role for graduation year '{year_int}'"
+                    )
                     print(f"Created new role '{class_role_name}' for graduation year '{year_int}'.")
                     log_output += f"SUCCESS: Created new role '{class_role_name}' for graduation year '{year_int}'.\n"
                 else:
                     log_output += f"INFO: Role '{class_role_name}' already exists. Skipping creation.\n"
 
-                #Make a co-{year_int} channel if it doesn't exist
-                co_channel_name = f"co-{str(year_int)}"
+                co_channel_name = year_utils.format_class_channel_name(year_int)
                 co_channel = discord.utils.get(ctx.guild.channels, name=co_channel_name)
 
                 if not co_channel:
-                    #Define permissions for the new channel
                     overwrites = {
                         ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
                         class_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
                     }
-
-                    # Create the channel in the same category as the Leadership channels
                     class_chat_category = discord.utils.get(ctx.guild.categories, name="Class Chat")
                     if class_chat_category:
                         await ctx.guild.create_text_channel(name=co_channel_name, category=class_chat_category, overwrites=overwrites)
@@ -486,11 +503,8 @@ class AdminMacros(commands.Cog):
                 else:
                     log_output += f"INFO: Channel '{co_channel_name}' already exists. Skipping creation. We gucci\n"
 
-            with open('current_years.json', 'w') as file:
-                json.dump(current_years, file, indent=4)
-            
             await ctx.send(f"Transition process for graduation year {grad_year-1}'-{grad_year}' completed successfully. Please check log for details.")
-            await ctx.send(embed = discord.Embed(title="Transition Logs", description=log_output))
+            await ctx.send(embed=discord.Embed(title="Transition Logs", description=log_output))
         except Exception as e:
             await ctx.send(f"An error occurred during the transition process: {e}")
 
@@ -504,41 +518,28 @@ class AdminMacros(commands.Cog):
             member (discord.Member): The member to approve as a leader.
             ministries (str): The ministries the member will lead.
         """
-        m_list = [m.capitalize() if m.lower() != "vam" else "VAM" for m in list(ministries)]
+        m_list = ["VAM" if m.lower() == "vam" else m.capitalize() for m in ministries]
 
-        #Check for invalid ministries in the list
         err_str = ""
         for m in m_list:
-            if m.upper() != "VAM" and m.capitalize() not in ROLE_DATA:
+            if m.upper() != "VAM" and m not in ROLE_DATA:
                 err_str += f"ERROR: Ministry '{m}' not found in the server. Please check the ministry name and try again.\n"
 
         if err_str:
-            embed = discord.Embed(title = "Error", description=err_str, color=discord.Color.red())
+            embed = discord.Embed(title="Error", description=err_str, color=discord.Color.red())
             embed.set_footer(text="Note: For Visual Arts and Media, please use 'VAM' as the ministry name.")
-            await ctx.send(embed=embed)
-            return
+            return await ctx.send(embed=embed)
 
-        #Confirmation prompt before proceeding
-        await ctx.send(f"Confirmation: Are you sure you want to approve {member.mention} as a leader for the following ministries:\n{m_list}\nType 'yes' to confirm or 'no' to cancel.")
+        prompt = f"Confirmation: Are you sure you want to approve {member.mention} as a leader for the following ministries:\n{m_list}\nType 'yes' to confirm or 'no' to cancel."
+        confirmed = await self._prompt_yes_no(ctx, prompt, timeout=30.0)
 
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['yes', 'no']
+        if confirmed is None:
+            return await ctx.send(f"Approval process for {member.mention} has timed out. Please try again.")
+        elif not confirmed:
+            return await ctx.send(f"Approval process for {member.mention} has been cancelled.")
 
-        try:
-            event = await self.bot.wait_for('message', check=check, timeout=30.0)
-            if event.content.lower() == 'no':
-                await ctx.send(f"Approval process for {member.mention} has been cancelled.")
-                return
-            elif event.content.lower() == 'yes':
-                await ctx.send(f"Proceeding with the approval process for {member.mention}.")
-            else:
-                await ctx.send(f"Invalid response. Approval process for {member.mention} has been cancelled.")
-                return
-        except asyncio.TimeoutError:
-            await ctx.send(f"Approval process for {member.mention} has timed out. Please try again.")
-            return
-        
-        #Passed all checks, proceed to assignment
+        await ctx.send(f"Proceeding with the approval process for {member.mention}.")
+
         leadership_role = discord.utils.get(ctx.guild.roles, name="Leadership")
         if leadership_role:
             await member.add_roles(leadership_role)
@@ -548,27 +549,30 @@ class AdminMacros(commands.Cog):
 
         mention_str = ""
         for ministry in m_list:
-            #Assign ministry role
-            role_obj = discord.utils.get(ctx.guild.roles, name=ministry + " Staff")
+            role_obj = discord.utils.get(ctx.guild.roles, name=ministry)
             if role_obj:
                 await member.add_roles(role_obj)
                 await ctx.send(f"Successfully assigned the '{ministry}' role to {member.mention}.")
-                mention_str += f"{role_obj.mention} "
             else:
                 await ctx.send(f"ERROR: Role '{ministry}' not found in the server. Please create the role and try again.")
 
-        #Notify college staff channel
+            staff_role = discord.utils.get(ctx.guild.roles, name=f"{ministry} Staff")
+            if staff_role:
+                mention_str += f"{staff_role.mention} "
+            elif role_obj:
+                mention_str += f"{role_obj.mention} "
+
         staff_channel = discord.utils.get(ctx.guild.text_channels, name="new-leaders-notifications")
         if staff_channel:
             embed = discord.Embed(
-                title="New Leader Approved", 
+                title="New Leader Approved",
                 description=f"{member.mention} has been approved as a leader for the following ministries: \n{', '.join(m_list)}.",
                 color=discord.Color.green()
             )
-            embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
-            embed.set_footer(text = "Staff in charge of these teams please react with any emoji to acknowledge this notification.")
-            await staff_channel.send(f"{mention_str}", embed=embed)
-            #await staff_channel.send(embed=embed)
+            avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
+            embed.set_thumbnail(url=avatar_url)
+            embed.set_footer(text="Staff in charge of these teams please react with any emoji to acknowledge this notification.")
+            await staff_channel.send(content=f"{mention_str}".strip(), embed=embed)
         else:
             await ctx.send("ERROR: 'new-leaders-notifications' channel not found in the server. Please create the channel and try again.")
 

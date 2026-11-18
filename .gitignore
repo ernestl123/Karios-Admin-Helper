@@ -1,12 +1,17 @@
 # Ignore Python cache
 __pycache__/
 .vscode/
+.pytest_cache/
+.coverage
+htmlcov/
 
-#Ignore config files
+# Ignore config and temp files
 config.json
 leaders.csv
+current_leadership.csv
+migration_output.txt
 .venv/
 spreadsheetWebhook.gs
 
-#Ignore database files
+# Ignore database files
 kairos.db

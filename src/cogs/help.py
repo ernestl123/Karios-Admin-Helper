@@ -1,19 +1,32 @@
+import json
+from pathlib import Path
 import discord
 from discord.ext import commands
-import json
+import utils.year_utils as year_utils
 
-with open("roles.json", "r") as file:
-    role_file = json.load(file)
-    BOT_ADMIN_PERM = role_file["role_info"]["Admin_Access_Roles"]
+def _load_admin_roles():
+    p = year_utils.get_project_root() / "roles.json"
+    if not p.exists():
+        p = Path("roles.json")
+    if p.exists():
+        with open(p, "r", encoding="utf-8") as file:
+            role_file = json.load(file)
+            return role_file.get("role_info", {}).get("Admin_Access_Roles", [])
+    return ["Admin Staff", "Pastor", "Shadow Admin"]
+
+BOT_ADMIN_PERM = _load_admin_roles()
 
 class help(commands.Cog):
     def __init__(self, bot):
-        self.bot = bot 
+        self.bot = bot
         self.__cog_check__ = self.cog_check
+        for cmd in self.__cog_commands__:
+            cmd.cog = self
 
     async def cog_check(self, ctx):
-            allowed_roles = set(BOT_ADMIN_PERM)
-            return any(role.name in allowed_roles for role in ctx.author.roles)
+        allowed_roles = set(BOT_ADMIN_PERM)
+        author_roles = getattr(ctx.author, "roles", [])
+        return any(role.name in allowed_roles for role in author_roles)
 
     @commands.command(pass_context=True, hidden=True)
     async def help(self, ctx):

@@ -1,83 +1,103 @@
 import json
-import sqlite3
-import discord
-from discord.ext import commands, tasks
+import os
+from pathlib import Path
+import sys
 import threading
-import requests
+from typing import Any, Dict, Optional
 
-from webhook import start_webhook_server
+import discord
+from discord.ext import commands
 
-def load_config(path):
-    with open(path, "r") as file:
-        return json.load(file)
+# Ensure src directory is in sys.path
+SRC_DIR = Path(__file__).resolve().parent
+ROOT_DIR = SRC_DIR.parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+try:
+    from webhook import start_webhook_server
+except ImportError:
+    from src.webhook import start_webhook_server
+
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "token": os.getenv("DISCORD_TOKEN", "MOCK_TOKEN"),
+    "prefix": os.getenv("BOT_PREFIX", "!"),
+    "form_log_channel_id": int(os.getenv("FORM_LOG_CHANNEL_ID", "0")),
+    "VAM_ticket_log_channel_id": int(os.getenv("VAM_TICKET_LOG_CHANNEL_ID", "0")),
+    "form_port": int(os.getenv("FORM_PORT", "5000")),
+    "pc_client_id": os.getenv("PC_CLIENT_ID", ""),
+    "pc_client_secret": os.getenv("PC_CLIENT_SECRET", ""),
+    "form_webhook_secret": os.getenv("FORM_WEBHOOK_SECRET", "")
+}
+
+def load_config(path: str = "config.json") -> Dict[str, Any]:
+    """
+    Loads bot configuration from JSON file or falls back to defaults/env vars.
+    """
+    config_path = Path(path)
+    if not config_path.is_absolute():
+        # Check relative to cwd first, then relative to project root
+        if not config_path.exists():
+            root_path = ROOT_DIR / path
+            if root_path.exists():
+                config_path = root_path
+
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+            cfg = DEFAULT_CONFIG.copy()
+            cfg.update(data)
+            return cfg
+    return DEFAULT_CONFIG.copy()
 
 config = load_config("config.json")
 
-TOKEN = config["token"]
-PREFIX = config["prefix"]
-FORM_LOG_CHANNEL_ID = config["form_log_channel_id"]
-VAM_TICKET_LOG_CHANNEL_ID = config["VAM_ticket_log_channel_id"]
-FORM_PORT = config["form_port"]
+TOKEN = config.get("token")
+PREFIX = config.get("prefix", "!")
+FORM_LOG_CHANNEL_ID = config.get("form_log_channel_id")
+VAM_TICKET_LOG_CHANNEL_ID = config.get("VAM_ticket_log_channel_id")
+FORM_PORT = config.get("form_port", 5000)
 PCO_API_TOKEN = config.get("pc_client_id")
 PCO_API_SECRET = config.get("pc_client_secret")
 
+def create_bot(custom_config: Optional[Dict[str, Any]] = None) -> commands.Bot:
+    """Factory function to instantiate and configure the bot."""
+    cfg = custom_config or config
+    prefix = cfg.get("prefix", "!")
+    intents = discord.Intents.all()
+    bot_instance = commands.Bot(
+        command_prefix=commands.when_mentioned_or(prefix),
+        intents=intents,
+        activity=discord.Game(name="Watching forms...")
+    )
+    bot_instance.remove_command('help')
+    bot_instance.VAM_TICKET_LOG_CHANNEL_ID = cfg.get("VAM_ticket_log_channel_id")
+    return bot_instance
 
-bot = commands.Bot(command_prefix=commands.when_mentioned_or(PREFIX), intents=discord.Intents.all(), activity=discord.Game(name="Watching forms..."))
-bot.remove_command('help')
+bot = create_bot(config)
+
 cogs = [
     "cogs.AdminMacros",
     "cogs.help"
 ]
-bot.VAM_TICKET_LOG_CHANNEL_ID = VAM_TICKET_LOG_CHANNEL_ID
-    
+
 @bot.event
 async def on_ready():
-    # await bot.change_presence(activity = discord.Activity(type = discord.ActivityType.watching, name = "you..."))
     print("Online")
     for extension in cogs:
-        await bot.load_extension(f"{extension}")
-    # await bot.tree.clear_commands(guild=None)  # Clear all global application commands
-    # await bot.tree.sync(guild=discord.Object(id=607977353410379825))  # Sync commands for a specific guild
-    # print("Tree synced.")
-
+        try:
+            await bot.load_extension(extension)
+        except commands.ExtensionAlreadyLoaded:
+            pass
+        except Exception as e:
+            print(f"Failed to load extension {extension}: {e}")
 
 @bot.event
-async def on_message(message):
-    
+async def on_message(message: discord.Message):
     if not message.author.bot:
         await bot.process_commands(message)
-
-# @bot.event
-# async def setup_hook():
-#     # sqlite3.connect("database/kairos.db")
-#     bot.db = DBManager("src/database/kairos.db")
-#     try:
-#         await bot.db.connect()
-#         print("Connected to database.")
-#     except Exception as e:
-#         print(f"Error connecting to database: {e}")
-
-# @bot.event
-# async def on_member_join(member):
-#     # Check if the member exists in the database
-#     if not await bot.db.check_member_exists(member.id):
-#         print(f"Member {member.name} not found in database on join. No roles assigned.")
-#         return
-    
-#     grad_year, school, college = await bot.db.get_member(member.id)
-    
-#     # Assign roles based on the retrieved data
-#     # await utils.assign_new_member(member, member.name, school, college, grad_year, member.guild)
-#     print(f"Assigned roles to {member.name} based on database info.")
-"""
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-        await ctx.channel.send(error)       
-        return
-
-    print(error)
-"""
 
 if __name__ == '__main__':
     threading.Thread(target=start_webhook_server, args=(bot, config), daemon=True).start()
